@@ -131,8 +131,8 @@ function exportCSV() {
 
 const $ = sel => document.querySelector(sel);
 
-// Unlock function
-$("#btnUnlock").addEventListener("click", async () => {
+// Unlock logic function
+async function performUnlock() {
     const pw = $("#pw").value || "";
     const out = $("#outUnlock");
     try {
@@ -151,6 +151,17 @@ $("#btnUnlock").addEventListener("click", async () => {
     } catch (e) {
         console.error(e);
         out.innerHTML = "❌ <span class='warn'>Passphrase errata o dati corrotti.</span>";
+    }
+}
+
+// Unlock button click
+$("#btnUnlock").addEventListener("click", performUnlock);
+
+// Unlock on Enter key press in password field
+$("#pw").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        performUnlock();
     }
 });
 
