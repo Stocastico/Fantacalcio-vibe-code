@@ -253,7 +253,13 @@ document.addEventListener("click", ev => {
                 currentAuctionPlayer = null;
             }, 2500);
         } else {
-            const ourBid = currentOfferInt + 1;
+            // Easter egg: if max bid > 37 and current offer < 35, offer 36
+            let ourBid;
+            if (maxBid > 37 && currentOfferInt < 35) {
+                ourBid = 36;
+            } else {
+                ourBid = currentOfferInt + 1;
+            }
             lastSuggestedBid = { player: currentAuctionPlayer.name, value: ourBid };
             outAuction.innerHTML = `💰 <span class="ok">Offriamo: <strong>${ourBid}</strong> crediti</span>`;
         }
