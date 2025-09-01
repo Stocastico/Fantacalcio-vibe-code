@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player List Obfuscation Tool</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #334155;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #4338ca;
+        }
+
+        .output {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔒 Player List Obfuscation Tool</h1>
+
+        <div class="section">
+            <h3>1. Obfuscate Player List</h3>
+            <p>Paste your player list JSON array and set a passphrase to generate an obfuscated string:</p>
+
+            <label>Player List (JSON format):</label>
+            <textarea id="playerListInput"
+                placeholder='[{"name": "Player Name", "role": "A", "bid": 30}, ...]'></textarea>
+
+            <label>Passphrase:</label>
+            <input type="password" id="passphraseInput" placeholder="Enter your passphrase">
+
+            <button onclick="obfuscateList()">🔒 Generate Obfuscated String</button>
+
+            <div id="obfuscateOutput" class="output" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. Test Deobfuscation</h3>
+            <p>Test if an obfuscated string can be properly decoded:</p>
+
+            <label>Obfuscated String:</label>
+            <textarea id="obfuscatedInput" placeholder="Paste obfuscated base64 string here..."></textarea>
+
+            <label>Passphrase:</label>
+            <input type="password" id="testPassphrase" placeholder="Enter passphrase to test">
+
+            <button onclick="testDeobfuscateList()">🔓 Test Deobfuscation</button>
+
+            <div id="deobfuscateOutput" class="output" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>📋 Instructions</h3>
+            <ol>
+                <li>Edit <code>players-cleartext.js</code> with your desired players</li>
+                <li>Copy the player list array and paste it in the first textarea</li>
+                <li>Set your passphrase</li>
+                <li>Click "Generate Obfuscated String"</li>
+                <li>Copy the generated string and replace the <code>OBF</code> constant in <code>players.js</code></li>
+                <li>Use the same passphrase in your fantasy football app</li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="obfuscation-utils.js"></script>
+    <script>
+        async function obfuscateList() {
+            const playerListText = document.getElementById('playerListInput').value;
+            const passphrase = document.getElementById('passphraseInput').value;
+            const output = document.getElementById('obfuscateOutput');
+
+            if (!playerListText || !passphrase) {
+                alert('Please provide both player list and passphrase');
+                return;
+            }
+
+            try {
+                const playerList = JSON.parse(playerListText);
+                const obfuscated = await generateObfuscatedString(playerList, passphrase);
+
+                output.style.display = 'block';
+                output.innerHTML = `✅ Obfuscation successful!\n\n📋 Copy this to your players.js file:\n\nconst OBF = "${obfuscated}";\n\n📊 Stats:\n- Players: ${playerList.length}\n- String length: ${obfuscated.length} characters`;
+
+            } catch (error) {
+                output.style.display = 'block';
+                output.innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+
+        async function testDeobfuscateList() {
+            const obfuscatedText = document.getElementById('obfuscatedInput').value;
+            const passphrase = document.getElementById('testPassphrase').value;
+            const output = document.getElementById('deobfuscateOutput');
+
+            if (!obfuscatedText || !passphrase) {
+                alert('Please provide both obfuscated string and passphrase');
+                return;
+            }
+
+            try {
+                const playerList = await testDeobfuscation(obfuscatedText, passphrase);
+
+                output.style.display = 'block';
+                output.innerHTML = `✅ Deobfuscation successful!\n\n📊 Found ${playerList.length} players:\n\n${JSON.stringify(playerList, null, 2)}`;
+
+            } catch (error) {
+                output.style.display = 'block';
+                output.innerHTML = `❌ Deobfuscation failed: ${error.message}`;
+            }
+        }
+
+        // Load example data
+        window.addEventListener('load', () => {
+            const exampleData = [
+                { "name": "Lautaro Martinez", "role": "A", "bid": 45 },
+                { "name": "Barella", "role": "C", "bid": 40 },
+                { "name": "Theo Hernandez", "role": "D", "bid": 35 }
+            ];
+
+            document.getElementById('playerListInput').value = JSON.stringify(exampleData, null, 2);
+        });
+    </script>
+</body>
+
+</html>
