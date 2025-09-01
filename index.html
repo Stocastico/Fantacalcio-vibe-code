@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="it">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Fantacalcio – Helper d'Asta (offuscato)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <h1>Fantacalcio – Helper d'Asta</h1>
+    <p class="muted">
+        Lista <strong>offuscata</strong> con passphrase. Non è cifratura forte, ma scoraggia chi apre il sorgente.
+    </p>
+
+    <!-- BLOCCO SBLOCCO -->
+    <div id="locked" class="card" style="max-width:580px;">
+        <h3>Sblocca la lista</h3>
+        <label for="pw">Passphrase</label>
+        <input id="pw" type="password" placeholder="Inserisci passphrase" />
+        <div class="row">
+            <button id="btnUnlock">Sblocca</button>
+        </div>
+        <div id="outUnlock" class="out"></div>
+        <p class="muted">Dopo lo sblocco, la pagina funziona offline come l'helper normale.</p>
+    </div>
+
+    <!-- APP -->
+    <div id="app" style="display:none;">
+        <div class="row">
+            <span class="pill" id="countP">P: 0</span>
+            <span class="pill" id="countD">D: 0</span>
+            <span class="pill" id="countC">C: 0</span>
+            <span class="pill" id="countA">A: 0</span>
+            <span class="pill" id="sumNow">Somma tetti: 0</span>
+            <span class="pill" id="budgetLeft">Crediti residui: 500</span>
+        </div>
+
+        <div class="layout" style="margin-top:16px;">
+            <!-- SINISTRA: strumenti base -->
+            <div>
+                <div class="grid">
+                    <!-- 1) CERCA -->
+                    <section class="card">
+                        <h3>1) Fai offerta per un giocatore</h3>
+
+                        <!-- Random player selection -->
+                        <div style="margin-bottom:16px;">
+                            <p class="muted">Estrai un giocatore a caso dalla tua lista e inizia l'asta con offerta di 1
+                                credito:</p>
+                            <div class="row">
+                                <button id="btnRandom">Estrai e inizia asta</button>
+                                <button id="btnShowLeft" class="secondary">Mostra lista rimanente</button>
+                                <button id="btnReset" class="secondary"
+                                    title="Ripristina lista originale">Reset</button>
+                            </div>
+                            <div id="outRandom" class="out"></div>
+                            <details id="leftWrap" style="display:none; margin-top:8px;">
+                                <summary>Lista rimanente</summary>
+                                <div id="leftList" class="muted"></div>
+                            </details>
+                        </div>
+
+                        <!-- Separator -->
+                        <div style="text-align:center; margin:20px 0; font-size:1.2em; font-weight:bold; color:#666;">
+                            Oppure
+                        </div>
+
+                        <!-- Manual search -->
+                        <div>
+                            <label for="q">Nome giocatore</label>
+                            <input id="q" type="text" placeholder="es. Lautaro, Dybala, Zaccagni..." />
+                            <div class="row">
+                                <button id="btnCheck">Cerca nella mia lista</button>
+                                <button id="btnClear" class="secondary">Pulisci</button>
+                            </div>
+                            <div id="outCheck" class="out"></div>
+                        </div>
+
+                        <!-- Auction bidding section (hidden initially) -->
+                        <div id="auctionSection"
+                            style="display:none; margin-top:12px; padding:12px; background:#f0f8ff; border-radius:8px;">
+                            <h4 style="margin-top:0;">🏷️ Asta in corso</h4>
+                            <div id="playerInfo" style="margin-bottom:8px; font-weight:bold;"></div>
+                            <label for="currentOffer">Offerta attuale in asta</label>
+                            <input id="currentOffer" type="number" inputmode="numeric" min="1" step="1"
+                                placeholder="es. 25" />
+                            <div class="row" style="margin-top:8px;">
+                                <button id="btnCalculateBid">Calcola mia offerta</button>
+                                <button id="btnPlayerWon" class="secondary">Giocatore acquisito</button>
+                                <button id="btnPlayerLost" class="secondary">Giocatore andato</button>
+                            </div>
+                            <div id="outAuction" class="out"></div>
+                        </div>
+
+                        <p class="muted">Se il nome è ambiguo oppure parziale, ti suggerisco i match possibili.</p>
+                    </section>
+                </div>
+            </div>
+
+            <!-- DESTRA: sidebar acquisti -->
+            <aside class="sidebar">
+                <section class="card">
+                    <h3>Rosa acquistata</h3>
+                    <p class="muted">Giocatori acquisiti tramite asta. Usa la sezione "Cerca giocatore e asta" per
+                        aggiungere
+                        nuovi acquisti.</p>
+
+                    <ul id="purchasesList" class="list"></ul>
+
+                    <div class="row" style="margin-top:12px;">
+                        <span class="pill" id="spentPill">Speso: 0</span>
+                        <span class="pill" id="leftPill">Residuo: 500</span>
+                    </div>
+
+                    <div class="row" style="margin-top:8px;">
+                        <button id="btnUndoBuy" class="secondary">Annulla ultimo</button>
+                        <button id="btnExportCSV" class="secondary">Esporta CSV</button>
+                    </div>
+
+                    <div id="outBuy" class="out"></div>
+                </section>
+            </aside>
+        </div>
+
+        <details class="card" style="margin-top:16px;">
+            <summary>Avanzato: re-offusca con nuova passphrase</summary>
+            <p class="muted">
+                Dopo lo sblocco, puoi inserire una nuova passphrase e ottenere una stringa offuscata da sostituire nel
+                file
+                (variabile <code>OBF</code>).
+                Questo non salva automaticamente: copia/incolla manualmente.
+            </p>
+            <label for="newpw">Nuova passphrase</label>
+            <input id="newpw" type="password" placeholder="Nuova passphrase" />
+            <div class="row">
+                <button id="btnReObf">Genera nuova stringa offuscata</button>
+            </div>
+            <div id="outReObf" class="out"></div>
+        </details>
+    </div>
+
+    <script src="players.js"></script>
+    <script src="script.js"></script>
+
+</body>
+
+</html>
