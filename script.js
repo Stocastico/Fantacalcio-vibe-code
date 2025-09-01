@@ -20,6 +20,7 @@ function updateCounters() {
     document.getElementById("countA").textContent = `A: ${c.A}`;
     document.getElementById("sumNow").textContent = `Somma tetti: ${sumBid(roster)}`;
     document.getElementById("budgetLeft").textContent = `Crediti residui: ${START_BUDGET - spent}`;
+    document.getElementById("playersLeft").textContent = `Giocatori rimanenti: ${roster.length}`;
     document.getElementById("spentPill").textContent = `Speso: ${spent}`;
     document.getElementById("leftPill").textContent = `Residuo: ${START_BUDGET - spent}`;
 }
