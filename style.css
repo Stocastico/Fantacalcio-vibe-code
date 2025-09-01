@@ -93,6 +93,23 @@ button.secondary {
     color: #111;
 }
 
+button.emergency {
+    background: #dc2626;
+    color: #fff;
+    border: 1px solid #b91c1c;
+    font-weight: 600;
+    position: relative;
+}
+
+button.emergency:hover {
+    background: #b91c1c;
+    border-color: #991b1b;
+}
+
+button.emergency:active {
+    background: #991b1b;
+}
+
 button:disabled {
     opacity: .6;
     cursor: not-allowed;
