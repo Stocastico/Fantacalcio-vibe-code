@@ -41,6 +41,26 @@ function findCandidates(q, inList = roster) {
     return inList.filter(p => norm(p.name).includes(s));
 }
 
+function redistributeCredits(savedCredits, purchasedPlayerName) {
+    if (savedCredits <= 0 || !roster || roster.length === 0) return 0;
+
+    // Get remaining players (excluding the one just purchased) sorted by max bid (highest first)
+    const remainingPlayers = roster
+        .filter(p => norm(p.name) !== norm(purchasedPlayerName))
+        .sort((a, b) => (b.bid || 0) - (a.bid || 0));
+
+    let creditsToDistribute = Math.min(savedCredits, remainingPlayers.length);
+    let distributed = 0;
+
+    // Add +1 to the most expensive players until credits run out
+    for (let i = 0; i < creditsToDistribute && i < remainingPlayers.length; i++) {
+        remainingPlayers[i].bid = (remainingPlayers[i].bid || 0) + 1;
+        distributed++;
+    }
+
+    return distributed;
+}
+
 function addPurchase(name, price) {
     const out = document.getElementById("outBuy");
     if (!name) { out.innerHTML = "❌ Nome mancante."; return false; }
@@ -51,14 +71,30 @@ function addPurchase(name, price) {
     const already = purchases.find(p => norm(p.name) === norm(name));
     if (already) { out.innerHTML = `❌ <span class="warn">"${name}" già acquistato (${already.price} crediti).`; return false; }
     if (spent + priceInt > START_BUDGET) { out.innerHTML = `❌ <span class="warn">Budget insufficiente. Residuo ${START_BUDGET - spent}, prezzo ${priceInt}.`; return false; }
+
     const over = playerInList.bid && priceInt > playerInList.bid;
+    const savedCredits = playerInList.bid ? Math.max(0, playerInList.bid - priceInt) : 0;
+
     purchases.push({ name, price: priceInt });
     spent += priceInt;
+
+    // Redistribute saved credits to remaining players
+    let redistributed = 0;
+    if (savedCredits > 0) {
+        redistributed = redistributeCredits(savedCredits, name);
+    }
+
     const li = document.createElement("li");
     li.textContent = `${name} - ${priceInt}` + (over ? ` (>${playerInList.bid})` : "");
     li.classList.add("flash-add");
     document.getElementById("purchasesList").appendChild(li);
-    out.innerHTML = over ? `⚠️ Aggiunto "${name}" per ${priceInt}` : `✅ Aggiunto "${name}" per ${priceInt}`;
+
+    let message = over ? `⚠️ Aggiunto "${name}" per ${priceInt}` : `✅ Aggiunto "${name}" per ${priceInt}`;
+    if (redistributed > 0) {
+        message += ` | 💰 ${redistributed} crediti ridistribuiti ai giocatori più costosi`;
+    }
+    out.innerHTML = message;
+
     updateCounters();
     return li;
 }
