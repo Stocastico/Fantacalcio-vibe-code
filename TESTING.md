@@ -106,7 +106,7 @@
 
 ### Scenario 1: Complete Auction Flow
 
-```
+```text
 1. Unlock app with passphrase
 2. Search for "Lautaro" 
 3. Start auction with current offer 35
@@ -118,7 +118,7 @@
 
 ### Scenario 2: Budget Management
 
-```
+```text
 1. Start with 500 credits
 2. Buy expensive players until near budget limit
 3. Try to buy player that would exceed budget
@@ -128,7 +128,7 @@
 
 ### Scenario 3: Edge Cases
 
-```
+```text
 1. Search for player with special characters
 2. Try to acquire same player twice
 3. Test with empty search
@@ -208,7 +208,7 @@ updateCounters();
 
 ## 📊 Test Results Template
 
-```
+```text
 ✅ PASSED: [Feature description]
 ❌ FAILED: [Feature description] - [Issue details]
 ⚠️  PARTIAL: [Feature description] - [Notes]
@@ -216,7 +216,7 @@ updateCounters();
 
 ### Example Test Run
 
-```
+```text
 ✅ PASSED: Unlock with correct passphrase
 ✅ PASSED: Search exact player name
 ✅ PASSED: Easter egg bid calculation (36 credits)
