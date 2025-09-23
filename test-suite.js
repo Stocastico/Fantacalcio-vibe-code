@@ -222,7 +222,7 @@ class FantasyFootballTester {
         // Save original bids
         const originalBids = roster.map(p => ({ name: p.name, bid: p.bid }));
 
-        // Test redistribution
+        // Test redistribution on purchase (existing test)
         const purchasePrice = testPlayer.bid - 5; // 5 credits to redistribute
         const savedCredits = testPlayer.bid - purchasePrice;
 
@@ -230,7 +230,7 @@ class FantasyFootballTester {
 
         this.assert(
             redistributed === Math.min(savedCredits, roster.length - 1),
-            'Credit redistribution count',
+            'Credit redistribution on purchase',
             `Expected redistribution to ${Math.min(savedCredits, roster.length - 1)} players, got ${redistributed}`
         );
 
@@ -239,6 +239,167 @@ class FantasyFootballTester {
             const player = roster.find(p => p.name === orig.name);
             if (player) player.bid = orig.bid;
         });
+    }
+
+    testCreditRedistributionOnLoss() {
+        this.log('Testing credit redistribution on player loss...', 'info');
+
+        if (!roster || roster.length < 3) {
+            this.log('Insufficient roster for loss redistribution testing', 'warn');
+            return;
+        }
+
+        // Find a player with a good bid amount for testing
+        const lostPlayer = roster.find(p => p.bid >= 25);
+        if (!lostPlayer) {
+            this.log('No suitable player for loss redistribution test', 'warn');
+            return;
+        }
+
+        // Save original state
+        const originalBids = roster.map(p => ({ name: p.name, bid: p.bid }));
+        const originalRosterLength = roster.length;
+        const lostPlayerBid = lostPlayer.bid;
+
+        // Get the top players before redistribution (excluding the lost player)
+        const remainingPlayersBeforeLoss = roster
+            .filter(p => p.name !== lostPlayer.name)
+            .sort((a, b) => (b.bid || 0) - (a.bid || 0));
+
+        const topPlayersBefore = remainingPlayersBeforeLoss.slice(0, Math.min(lostPlayerBid, remainingPlayersBeforeLoss.length));
+        const topPlayersBidsBefore = topPlayersBefore.map(p => p.bid);
+
+        // Test redistribution on loss
+        const redistributed = redistributeCreditsOnLoss(lostPlayer);
+
+        // Verify the redistribution count
+        const expectedRedistribution = Math.min(lostPlayerBid, remainingPlayersBeforeLoss.length);
+        this.assert(
+            redistributed === expectedRedistribution,
+            'Credit redistribution on loss count',
+            `Expected ${expectedRedistribution} credits redistributed, got ${redistributed}`
+        );
+
+        // Verify that top players got +1 bid each
+        if (redistributed > 0) {
+            const topPlayersAfter = topPlayersBefore.slice(0, redistributed);
+            let correctDistribution = true;
+
+            for (let i = 0; i < redistributed; i++) {
+                const expectedNewBid = topPlayersBidsBefore[i] + 1;
+                if (topPlayersAfter[i].bid !== expectedNewBid) {
+                    correctDistribution = false;
+                    break;
+                }
+            }
+
+            this.assert(
+                correctDistribution,
+                'Correct credit distribution to top players',
+                'Top players should each receive +1 credit'
+            );
+        }
+
+        // Test edge case: empty roster
+        const emptyRosterResult = redistributeCreditsOnLoss({ name: 'Test', bid: 10 });
+        this.assert(
+            emptyRosterResult === 0,
+            'Redistribution with empty roster',
+            'Should return 0 when no remaining players'
+        );
+
+        // Test edge case: player with 0 bid
+        const zeroBidPlayer = { name: 'ZeroBid', bid: 0 };
+        const zeroBidResult = redistributeCreditsOnLoss(zeroBidPlayer);
+        this.assert(
+            zeroBidResult === 0,
+            'Redistribution with zero bid player',
+            'Should return 0 when lost player has no bid'
+        );
+
+        // Restore original bids
+        originalBids.forEach(orig => {
+            const player = roster.find(p => p.name === orig.name);
+            if (player) player.bid = orig.bid;
+        });
+    }
+
+    testLossScenarios() {
+        this.log('Testing loss scenarios with redistribution...', 'info');
+
+        if (!roster || roster.length < 5) {
+            this.log('Insufficient roster for loss scenario testing', 'warn');
+            return;
+        }
+
+        // Save original state
+        const originalRoster = JSON.parse(JSON.stringify(roster));
+
+        // Test scenario: Player lost through manual "Player Lost" button
+        const testPlayer = roster[0];
+        const originalBid = testPlayer.bid;
+        const originalRosterLength = roster.length;
+
+        // Get remaining players before loss (sorted by bid)
+        const remainingBefore = roster
+            .filter(p => p.name !== testPlayer.name)
+            .sort((a, b) => (b.bid || 0) - (a.bid || 0));
+
+        const topPlayerBidBefore = remainingBefore.length > 0 ? remainingBefore[0].bid : 0;
+
+        // Simulate the loss and redistribution
+        const lostPlayer = testPlayer;
+        roster = roster.filter(p => p.name !== testPlayer.name);
+        const redistributed = redistributeCreditsOnLoss(lostPlayer);
+
+        // Verify roster reduction
+        this.assert(
+            roster.length === originalRosterLength - 1,
+            'Roster size reduction on loss',
+            `Expected roster to shrink by 1, from ${originalRosterLength} to ${roster.length + 1}`
+        );
+
+        // Verify redistribution occurred if there were remaining players
+        if (remainingBefore.length > 0 && originalBid > 0) {
+            const topPlayerAfter = roster.find(p => p.name === remainingBefore[0].name);
+            if (topPlayerAfter) {
+                const expectedNewBid = topPlayerBidBefore + (redistributed > 0 ? 1 : 0);
+                this.assert(
+                    topPlayerAfter.bid >= topPlayerBidBefore,
+                    'Top player bid increase after loss',
+                    `Top player bid should increase from ${topPlayerBidBefore} to at least ${expectedNewBid}`
+                );
+            }
+        }
+
+        // Test scenario: Player lost through bid limit reached
+        if (roster.length > 0) {
+            const highBidPlayer = roster.find(p => p.bid >= 30);
+            if (highBidPlayer) {
+                const beforeLoss = roster.length;
+                const playerBid = highBidPlayer.bid;
+
+                // Simulate reaching bid limit
+                const lostPlayer2 = highBidPlayer;
+                roster = roster.filter(p => p.name !== highBidPlayer.name);
+                const redistributed2 = redistributeCreditsOnLoss(lostPlayer2);
+
+                this.assert(
+                    redistributed2 <= playerBid,
+                    'Redistribution amount limit',
+                    `Redistributed ${redistributed2} should not exceed lost player bid ${playerBid}`
+                );
+
+                this.assert(
+                    redistributed2 <= beforeLoss - 1,
+                    'Redistribution count limit',
+                    `Redistributed to ${redistributed2} players should not exceed remaining players ${beforeLoss - 1}`
+                );
+            }
+        }
+
+        // Restore original roster
+        roster = originalRoster;
     }
 
     testCounters() {
@@ -307,6 +468,8 @@ class FantasyFootballTester {
             this.testBidCalculation();
             this.testCounters();
             this.testCreditRedistribution();
+            this.testCreditRedistributionOnLoss();
+            this.testLossScenarios();
             this.testPurchaseSystem();
         } catch (error) {
             this.log(`Test suite error: ${error.message}`, 'fail');

@@ -61,6 +61,29 @@ function redistributeCredits(savedCredits, purchasedPlayerName) {
     return distributed;
 }
 
+function redistributeCreditsOnLoss(lostPlayer) {
+    if (!lostPlayer || !roster || roster.length === 0) return 0;
+
+    // Get all remaining players (excluding the lost one) sorted by max bid (highest first)
+    const remainingPlayers = roster
+        .filter(p => norm(p.name) !== norm(lostPlayer.name))
+        .sort((a, b) => (b.bid || 0) - (a.bid || 0));
+
+    if (remainingPlayers.length === 0) return 0;
+
+    const creditsToRedistribute = lostPlayer.bid || 0;
+    let creditsToDistribute = Math.min(creditsToRedistribute, remainingPlayers.length);
+    let distributed = 0;
+
+    // Add +1 to the most expensive players until credits run out
+    for (let i = 0; i < creditsToDistribute && i < remainingPlayers.length; i++) {
+        remainingPlayers[i].bid = (remainingPlayers[i].bid || 0) + 1;
+        distributed++;
+    }
+
+    return distributed;
+}
+
 function addPurchase(name, price) {
     const out = document.getElementById("outBuy");
     if (!name) { out.innerHTML = "❌ Nome mancante."; return false; }
@@ -285,15 +308,23 @@ document.addEventListener("click", ev => {
         const currentOfferInt = Math.round(currentOffer);
         const maxBid = currentAuctionPlayer.bid;
         if (currentOfferInt >= maxBid) {
-            // lost - remove from roster
+            // lost - redistribute credits and remove from roster
+            const lostPlayer = currentAuctionPlayer;
             const before = roster.length;
             roster = roster.filter(p => p.name !== currentAuctionPlayer.name);
+            let redistributed = 0;
             if (roster.length !== before) {
+                redistributed = redistributeCreditsOnLoss(lostPlayer);
                 updateCounters();
                 if (document.getElementById("leftWrap").style.display !== "none")
                     document.getElementById("leftList").textContent = listRemaining();
             }
-            outAuction.innerHTML = `😞 <strong>${currentAuctionPlayer.name}</strong> andato ad altri (raggiunto limite interno).`;
+
+            let message = `😞 <strong>${currentAuctionPlayer.name}</strong> andato ad altri (raggiunto limite interno).`;
+            if (redistributed > 0) {
+                message += ` | 💰 ${redistributed} crediti ridistribuiti ai giocatori più costosi`;
+            }
+            outAuction.innerHTML = message;
             lastSuggestedBid = null;
             setTimeout(() => {
                 document.getElementById("auctionSection").style.display = "none";
@@ -352,13 +383,21 @@ document.addEventListener("click", ev => {
     if (id === "btnPlayerLost") {
         if (!currentAuctionPlayer) return;
         const outAuction = document.getElementById("outAuction");
+        const lostPlayer = currentAuctionPlayer;
         const before = roster.length;
         roster = roster.filter(p => p.name !== currentAuctionPlayer.name);
+        let redistributed = 0;
         if (roster.length !== before) {
+            redistributed = redistributeCreditsOnLoss(lostPlayer);
             updateCounters();
             if (document.getElementById("leftWrap").style.display !== "none")
                 document.getElementById("leftList").textContent = listRemaining();
-            outAuction.innerHTML = `😞 <strong>${currentAuctionPlayer.name}</strong> andato ad altri e rimosso.`;
+
+            let message = `😞 <strong>${currentAuctionPlayer.name}</strong> andato ad altri e rimosso.`;
+            if (redistributed > 0) {
+                message += ` | 💰 ${redistributed} crediti ridistribuiti ai giocatori più costosi`;
+            }
+            outAuction.innerHTML = message;
         } else {
             outAuction.innerHTML = `😞 <strong>${currentAuctionPlayer.name}</strong> andato ad altri.`;
         }
