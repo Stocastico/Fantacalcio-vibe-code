@@ -572,16 +572,47 @@
             if (!name) { out.innerHTML = "❌ Nome mancante."; return false; }
             if (!Number.isFinite(price) || price < 0) { out.innerHTML = "❌ Prezzo non valido."; return false; }
             const priceInt = Math.round(price);
+            
+            // Show price adjustment if needed
+            if (price !== priceInt && Math.abs(price - priceInt) > 0.01) {
+                console.log(`Price adjusted from ${price} to ${priceInt}`);
+            }
+            
             const playerInList = ORIGINAL ? ORIGINAL.find(p => norm(p.name) === norm(name)) : null;
-            if (!playerInList) { out.innerHTML = `❌ <span class="warn">"${name}" non è nella tua lista originale di giocatori.</span>`; return false; }
+            if (!playerInList) { 
+                // Use textContent to prevent HTML injection
+                out.innerHTML = `❌ <span class="warn"></span>`;
+                out.querySelector('.warn').textContent = `"${name}" non è nella tua lista originale di giocatori.`;
+                return false; 
+            }
             const already = purchases.find(p => norm(p.name) === norm(name));
-            if (already) { out.innerHTML = `❌ <span class="warn">"${name}" già acquistato (${already.price} crediti).`; return false; }
-            if (spent + priceInt > START_BUDGET) { out.innerHTML = `❌ <span class="warn">Budget insufficiente. Residuo ${START_BUDGET - spent}, prezzo ${priceInt}.`; return false; }
+            if (already) { 
+                out.innerHTML = `❌ <span class="warn"></span>`;
+                out.querySelector('.warn').textContent = `"${name}" già acquistato (${already.price} crediti).`;
+                return false; 
+            }
+            if (spent + priceInt > START_BUDGET) { 
+                out.innerHTML = `❌ <span class="warn">Budget insufficiente. Residuo ${START_BUDGET - spent}, prezzo ${priceInt}.</span>`;
+                return false; 
+            }
 
             const over = playerInList.bid && priceInt > playerInList.bid;
             const savedCredits = playerInList.bid ? Math.max(0, playerInList.bid - priceInt) : 0;
 
-            purchases.push({ name, price: priceInt });
+            // Record purchase info for potential undo
+            const purchaseInfo = {
+                name,
+                price: priceInt,
+                savedCredits,
+                redistributionSnapshot: null
+            };
+
+            // Save current bids before redistribution for undo capability
+            if (savedCredits > 0) {
+                purchaseInfo.redistributionSnapshot = roster.map(p => ({ name: p.name, bid: p.bid }));
+            }
+
+            purchases.push(purchaseInfo);
             spent += priceInt;
 
             // Redistribute saved credits to remaining players
@@ -599,7 +630,13 @@
             if (redistributed > 0) {
                 message += ` | 💰 ${redistributed} crediti ridistribuiti ai giocatori più costosi`;
             }
-            out.innerHTML = message;
+            
+            // Sanitize name for display
+            const safeMessage = document.createElement('span');
+            safeMessage.innerHTML = message.replace(name, `<span class="player-name"></span>`);
+            safeMessage.querySelector('.player-name').textContent = name;
+            out.innerHTML = '';
+            out.appendChild(safeMessage);
 
             updateCounters();
             return li;
@@ -610,9 +647,28 @@
             if (purchases.length === 0) { out.innerHTML = "⚠️ Nessun acquisto da annullare."; return; }
             const last = purchases.pop();
             spent -= last.price;
+            
+            // Restore bids if redistribution happened
+            if (last.redistributionSnapshot && roster) {
+                last.redistributionSnapshot.forEach(snapshot => {
+                    const player = roster.find(p => p.name === snapshot.name);
+                    if (player) {
+                        player.bid = snapshot.bid;
+                    }
+                });
+            }
+            
             const list = document.getElementById("purchasesList");
             if (list.lastChild) list.removeChild(list.lastChild);
-            out.innerHTML = `↩️ Annullato "${last.name}" per ${last.price}`;
+            
+            const safeMsg = document.createElement('span');
+            safeMsg.textContent = `↩️ Annullato "${last.name}" per ${last.price}`;
+            if (last.savedCredits > 0) {
+                safeMsg.textContent += ` | Redistribuzione annullata`;
+            }
+            out.innerHTML = '';
+            out.appendChild(safeMsg);
+            
             updateCounters();
         }
 
@@ -747,6 +803,12 @@
                 document.getElementById("leftList").textContent = listRemaining();
                 document.getElementById("outRandom").textContent = "";
                 document.getElementById("outCheck").textContent = "";
+                
+                // Clear auction state
+                currentAuctionPlayer = null;
+                lastSuggestedBid = null;
+                const auctionSection = document.getElementById("auctionSection");
+                if (auctionSection) auctionSection.style.display = "none";
             }
 
             if (id === "btnReObf") {
@@ -839,12 +901,16 @@
                     outAuction.innerHTML = "❌ Prezzo non valido.";
                     return;
                 }
+                
                 // Usa il suggerimento calcolato (ourBid) se ancora valido, altrimenti assume base+1
                 let finalPrice = base + 1;
                 if (lastSuggestedBid && lastSuggestedBid.player === currentAuctionPlayer.name)
                     finalPrice = lastSuggestedBid.value;
+                
+                // CRITICAL FIX: Attempt purchase BEFORE removing from roster
                 const li = addPurchase(currentAuctionPlayer.name, finalPrice);
                 if (li) {
+                    // Only remove from roster after successful purchase
                     const before = roster.length;
                     roster = roster.filter(p => norm(p.name) !== norm(currentAuctionPlayer.name));
                     if (roster.length !== before) {
@@ -852,14 +918,25 @@
                         if (document.getElementById("leftWrap").style.display !== "none")
                             document.getElementById("leftList").textContent = listRemaining();
                     }
-                    outAuction.innerHTML = `🎉 <strong>${currentAuctionPlayer.name}</strong> acquisito, budget aggiornato e rimosso dalla lista rimanente.`;
+                    
+                    const safeMsg = document.createElement('span');
+                    safeMsg.innerHTML = `🎉 <strong></strong> acquisito, budget aggiornato e rimosso dalla lista rimanente.`;
+                    safeMsg.querySelector('strong').textContent = currentAuctionPlayer.name;
+                    outAuction.innerHTML = '';
+                    outAuction.appendChild(safeMsg);
+                    
                     li.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     setTimeout(() => li.classList.remove('flash-add'), 1600);
                     document.getElementById("auctionSection").style.display = "none";
                     currentAuctionPlayer = null;
                     lastSuggestedBid = null;
                 } else {
-                    outAuction.innerHTML = `⚠️ Verifica messaggi sotto la sezione acquisti: impossibile aggiungere <strong>${currentAuctionPlayer.name}</strong>.`;
+                    // Purchase failed - auction state remains, player NOT removed
+                    const safeMsg = document.createElement('span');
+                    safeMsg.innerHTML = `⚠️ Verifica messaggi sotto la sezione acquisti: impossibile aggiungere <strong></strong>.`;
+                    safeMsg.querySelector('strong').textContent = currentAuctionPlayer.name;
+                    outAuction.innerHTML = '';
+                    outAuction.appendChild(safeMsg);
                 }
             }
 
@@ -1645,6 +1722,521 @@
                 });
             }
 
+            testUndoFunctionality() {
+                this.log('Testing undo functionality with redistribution rollback...', 'info');
+
+                if (!roster || roster.length < 5) {
+                    this.log('Insufficient roster for undo testing', 'warn');
+                    return;
+                }
+
+                // Save original state
+                const originalBids = roster.map(p => ({ name: p.name, bid: p.bid }));
+                const originalSpent = spent;
+                const originalPurchasesCount = purchases.length;
+
+                // Test 1: Undo purchase with redistribution
+                this.log('Test 1: Undo purchase that had credit redistribution', 'info');
+                const testPlayer = roster.find(p => p.bid >= 20) || roster[0];
+                const purchasePrice = testPlayer.bid - 5; // Save 5 credits
+                
+                // Take snapshot of bids before purchase
+                const bidsBeforePurchase = roster.map(p => ({ name: p.name, bid: p.bid }));
+                
+                // Make purchase (triggers redistribution)
+                const li = addPurchase(testPlayer.name, purchasePrice);
+                this.assert(li !== false, 'Purchase succeeded', 'Purchase should succeed');
+
+                // Verify redistribution occurred
+                let redistributionOccurred = false;
+                roster.forEach((p, i) => {
+                    if (p.name !== testPlayer.name && p.bid !== bidsBeforePurchase[i].bid) {
+                        redistributionOccurred = true;
+                    }
+                });
+
+                // Now undo the purchase
+                undoPurchase();
+
+                // Verify bids rolled back
+                let rollbackSucceeded = true;
+                bidsBeforePurchase.forEach(snapshot => {
+                    const player = roster.find(p => p.name === snapshot.name);
+                    if (player && player.bid !== snapshot.bid) {
+                        rollbackSucceeded = false;
+                        this.log(`Rollback failed for ${player.name}: expected ${snapshot.bid}, got ${player.bid}`, 'warn');
+                    }
+                });
+
+                this.assert(
+                    rollbackSucceeded,
+                    'Bids correctly rolled back after undo',
+                    'All player bids should return to pre-purchase values'
+                );
+
+                this.assert(
+                    spent === originalSpent,
+                    'Spent credits restored after undo',
+                    `Expected ${originalSpent}, got ${spent}`
+                );
+
+                this.assert(
+                    purchases.length === originalPurchasesCount,
+                    'Purchase list restored after undo',
+                    `Expected ${originalPurchasesCount} purchases, got ${purchases.length}`
+                );
+
+                // Test 2: Undo purchase without redistribution (bought at max bid)
+                this.log('Test 2: Undo purchase with no redistribution', 'info');
+                const exactBidPlayer = roster[0];
+                const exactPrice = exactBidPlayer.bid;
+                const bidsBefore = roster.map(p => ({ name: p.name, bid: p.bid }));
+                
+                addPurchase(exactBidPlayer.name, exactPrice);
+                undoPurchase();
+
+                let bidsUnchanged = true;
+                bidsBefore.forEach(snapshot => {
+                    const player = roster.find(p => p.name === snapshot.name);
+                    if (player && player.bid !== snapshot.bid) {
+                        bidsUnchanged = false;
+                    }
+                });
+
+                this.assert(
+                    bidsUnchanged,
+                    'No bid changes for exact-price purchase undo',
+                    'Bids should remain unchanged'
+                );
+
+                // Test 3: Multiple undo operations
+                this.log('Test 3: Multiple sequential undo operations', 'info');
+                const player1 = roster.find(p => p.bid >= 15) || roster[0];
+                const player2 = roster.find(p => p.bid >= 15 && p.name !== player1.name) || roster[1];
+                
+                const initialBids = roster.map(p => ({ name: p.name, bid: p.bid }));
+                
+                addPurchase(player1.name, player1.bid - 3);
+                addPurchase(player2.name, player2.bid - 2);
+                
+                undoPurchase(); // Undo player2
+                undoPurchase(); // Undo player1
+
+                let multiUndoSuccess = true;
+                initialBids.forEach(snapshot => {
+                    const player = roster.find(p => p.name === snapshot.name);
+                    if (player && player.bid !== snapshot.bid) {
+                        multiUndoSuccess = false;
+                    }
+                });
+
+                this.assert(
+                    multiUndoSuccess,
+                    'Multiple undo operations restore state correctly',
+                    'All bids should return to initial state'
+                );
+
+                // Restore original state
+                originalBids.forEach(orig => {
+                    const player = roster.find(p => p.name === orig.name);
+                    if (player) player.bid = orig.bid;
+                });
+                purchases.length = 0;
+                spent = 0;
+
+                this.log('Undo functionality tests completed', 'info');
+            }
+
+            testEdgeCases() {
+                this.log('Testing edge cases and error handling...', 'info');
+
+                if (!roster || roster.length < 3) {
+                    this.log('Insufficient roster for edge case testing', 'warn');
+                    return;
+                }
+
+                // Test 1: Decimal price handling
+                this.log('Test 1: Decimal/fractional prices', 'info');
+                const player1 = roster[0];
+                const decimalPrice = 15.7;
+                const beforePurchases = purchases.length;
+                
+                addPurchase(player1.name, decimalPrice);
+                
+                if (purchases.length > beforePurchases) {
+                    const lastPurchase = purchases[purchases.length - 1];
+                    this.assert(
+                        lastPurchase.price === Math.round(decimalPrice),
+                        'Decimal price rounded correctly',
+                        `Expected ${Math.round(decimalPrice)}, got ${lastPurchase.price}`
+                    );
+                    undoPurchase(); // Clean up
+                }
+
+                // Test 2: Negative price
+                this.log('Test 2: Negative price rejection', 'info');
+                const beforeLen = purchases.length;
+                const result = addPurchase(roster[0].name, -10);
+                this.assert(
+                    result === false,
+                    'Negative price rejected',
+                    'Should not allow negative prices'
+                );
+                this.assert(
+                    purchases.length === beforeLen,
+                    'Purchase list unchanged for negative price',
+                    'No purchase should be added'
+                );
+
+                // Test 3: Empty player name
+                this.log('Test 3: Empty player name rejection', 'info');
+                const emptyResult = addPurchase('', 20);
+                this.assert(
+                    emptyResult === false,
+                    'Empty player name rejected',
+                    'Should not allow empty names'
+                );
+
+                // Test 4: Non-existent player
+                this.log('Test 4: Non-existent player rejection', 'info');
+                const fakeResult = addPurchase('NonExistentPlayer999', 20);
+                this.assert(
+                    fakeResult === false,
+                    'Non-existent player rejected',
+                    'Should only allow players from original list'
+                );
+
+                // Test 5: Duplicate purchase
+                this.log('Test 5: Duplicate purchase prevention', 'info');
+                const dupPlayer = roster[1];
+                addPurchase(dupPlayer.name, 10);
+                const dupResult = addPurchase(dupPlayer.name, 15);
+                this.assert(
+                    dupResult === false,
+                    'Duplicate purchase prevented',
+                    'Should not allow buying same player twice'
+                );
+                undoPurchase(); // Clean up
+
+                // Test 6: Budget exceeded
+                this.log('Test 6: Budget overflow prevention', 'info');
+                const overflowResult = addPurchase(roster[2].name, START_BUDGET + 100);
+                this.assert(
+                    overflowResult === false,
+                    'Budget overflow prevented',
+                    'Should not allow purchases exceeding budget'
+                );
+
+                // Test 7: Undo when no purchases
+                this.log('Test 7: Undo with empty purchase list', 'info');
+                purchases.length = 0;
+                spent = 0;
+                undoPurchase(); // Should not crash
+                this.assert(
+                    true,
+                    'Undo on empty list handled gracefully',
+                    'Should not throw error'
+                );
+
+                // Test 8: Zero price
+                this.log('Test 8: Zero price handling', 'info');
+                const zeroResult = addPurchase(roster[0].name, 0);
+                // Zero is technically valid (free agent)
+                if (zeroResult !== false) {
+                    this.assert(
+                        purchases[purchases.length - 1].price === 0,
+                        'Zero price accepted',
+                        'Free agents (price 0) should be allowed'
+                    );
+                    undoPurchase();
+                }
+
+                this.log('Edge case tests completed', 'info');
+            }
+
+            testCSVExport() {
+                this.log('Testing CSV export functionality...', 'info');
+
+                if (!roster || roster.length < 2) {
+                    this.log('Insufficient roster for CSV testing', 'warn');
+                    return;
+                }
+
+                // Test 1: Export with purchases
+                this.log('Test 1: CSV export with data', 'info');
+                const player1 = roster[0];
+                const player2 = roster[1];
+                
+                addPurchase(player1.name, 25);
+                addPurchase(player2.name, 30);
+
+                // We can't fully test file download in automated tests,
+                // but we can verify the function doesn't crash
+                try {
+                    exportCSV();
+                    this.assert(
+                        true,
+                        'CSV export executed without errors',
+                        'Export function should complete'
+                    );
+                } catch (e) {
+                    this.assert(
+                        false,
+                        'CSV export executed without errors',
+                        `Export threw error: ${e.message}`
+                    );
+                }
+
+                undoPurchase();
+                undoPurchase();
+
+                // Test 2: Export with no purchases
+                this.log('Test 2: CSV export with empty purchases', 'info');
+                purchases.length = 0;
+                spent = 0;
+                // Should show warning, not crash
+                exportCSV();
+                this.assert(
+                    true,
+                    'Empty CSV export handled gracefully',
+                    'Should show warning without crashing'
+                );
+
+                this.log('CSV export tests completed', 'info');
+            }
+
+            testComplexWorkflows() {
+                this.log('Testing complex multi-step workflows...', 'info');
+
+                if (!roster || roster.length < 10) {
+                    this.log('Insufficient roster for workflow testing', 'warn');
+                    return;
+                }
+
+                // Save initial state
+                const initialBids = roster.map(p => ({ name: p.name, bid: p.bid }));
+                const initialRosterSize = roster.length;
+
+                // Test 1: Complete auction workflow
+                this.log('Test 1: Complete auction workflow (search → bid → purchase)', 'info');
+                const player1 = roster.find(p => p.bid >= 20) || roster[0];
+                
+                // Simulate search
+                const matches = findCandidates(player1.name);
+                this.assert(
+                    matches.length >= 1,
+                    'Player found in search',
+                    'Search should find player'
+                );
+
+                // Simulate purchase with savings
+                const purchasePrice = player1.bid - 5;
+                const bidsBeforePurchase = roster.map(p => ({ name: p.name, bid: p.bid }));
+                const purchaseResult = addPurchase(player1.name, purchasePrice);
+                
+                this.assert(
+                    purchaseResult !== false,
+                    'Purchase succeeded in workflow',
+                    'Player should be purchased successfully'
+                );
+
+                // Simulate roster removal (as done by btnPlayerWon)
+                const beforeRemoval = roster.length;
+                roster = roster.filter(p => norm(p.name) !== norm(player1.name));
+                
+                this.assert(
+                    roster.length === beforeRemoval - 1,
+                    'Player removed from roster after purchase',
+                    'Roster size should decrease by 1'
+                );
+
+                // Test 2: Loss workflow with redistribution
+                this.log('Test 2: Complete loss workflow (bid → lose → redistribute)', 'info');
+                const player2 = roster.find(p => p.bid >= 15) || roster[0];
+                const player2Bid = player2.bid;
+                const bidsBeforeLoss = roster.filter(p => p.name !== player2.name).map(p => ({ name: p.name, bid: p.bid }));
+                
+                // Simulate loss
+                roster = roster.filter(p => p.name !== player2.name);
+                redistributeCreditsOnLoss(player2);
+
+                // Verify some players got +1
+                let someGotIncrease = false;
+                bidsBeforeLoss.forEach(snapshot => {
+                    const player = roster.find(p => p.name === snapshot.name);
+                    if (player && player.bid > snapshot.bid) {
+                        someGotIncrease = true;
+                    }
+                });
+
+                this.assert(
+                    player2Bid === 0 || someGotIncrease,
+                    'Credits redistributed after loss',
+                    'Some players should receive redistributed credits'
+                );
+
+                // Test 3: Purchase → Undo → Purchase different player
+                this.log('Test 3: Purchase-Undo-Purchase workflow', 'info');
+                
+                // Restore roster
+                roster = JSON.parse(JSON.stringify(this.originalRoster));
+                initialBids.forEach(orig => {
+                    const player = roster.find(p => p.name === orig.name);
+                    if (player) player.bid = orig.bid;
+                });
+                purchases.length = 0;
+                spent = 0;
+
+                const player3 = roster.find(p => p.bid >= 20) || roster[0];
+                const player4 = roster.find(p => p.bid >= 20 && p.name !== player3.name) || roster[1];
+                
+                addPurchase(player3.name, player3.bid - 3);
+                const spentAfterFirst = spent;
+                
+                undoPurchase();
+                this.assert(
+                    spent < spentAfterFirst,
+                    'Spent reduced after undo',
+                    'Budget should be restored'
+                );
+
+                addPurchase(player4.name, player4.bid - 2);
+                this.assert(
+                    purchases.length === 1 && purchases[0].name === player4.name,
+                    'Second purchase succeeded after undo',
+                    'Should be able to purchase different player'
+                );
+
+                // Test 4: Multiple purchases with cumulative redistribution
+                this.log('Test 4: Multiple purchases with cumulative redistribution', 'info');
+                
+                // Restore
+                roster = JSON.parse(JSON.stringify(this.originalRoster));
+                initialBids.forEach(orig => {
+                    const player = roster.find(p => p.name === orig.name);
+                    if (player) player.bid = orig.bid;
+                });
+                purchases.length = 0;
+                spent = 0;
+
+                const totalBidsBefore = sumBid(roster);
+                
+                // Make 3 purchases with savings
+                const p1 = roster.find(p => p.bid >= 20) || roster[0];
+                const p2 = roster.find(p => p.bid >= 20 && p.name !== p1.name) || roster[1];
+                const p3 = roster.find(p => p.bid >= 20 && p.name !== p1.name && p.name !== p2.name) || roster[2];
+                
+                addPurchase(p1.name, p1.bid - 3);
+                roster = roster.filter(p => norm(p.name) !== norm(p1.name));
+                
+                addPurchase(p2.name, p2.bid - 2);
+                roster = roster.filter(p => norm(p.name) !== norm(p2.name));
+                
+                addPurchase(p3.name, p3.bid - 1);
+                roster = roster.filter(p => norm(p.name) !== norm(p3.name));
+
+                const totalBidsAfter = sumBid(roster);
+                
+                // Total bids should have increased due to redistribution
+                this.assert(
+                    totalBidsAfter > totalBidsBefore - (p1.bid + p2.bid + p3.bid),
+                    'Cumulative redistribution increases total bids',
+                    'Multiple purchases with savings should boost remaining players'
+                );
+
+                // Restore original state
+                roster = JSON.parse(JSON.stringify(this.originalRoster));
+                initialBids.forEach(orig => {
+                    const player = roster.find(p => p.name === orig.name);
+                    if (player) player.bid = orig.bid;
+                });
+                purchases.length = 0;
+                spent = 0;
+
+                this.log('Complex workflow tests completed', 'info');
+            }
+
+            testDataIntegrity() {
+                this.log('Testing data integrity and state consistency...', 'info');
+
+                if (!roster || roster.length < 5) {
+                    this.log('Insufficient roster for integrity testing', 'warn');
+                    return;
+                }
+
+                // Test 1: Roster immutability during redistribution
+                this.log('Test 1: Roster player objects remain valid after redistribution', 'info');
+                const playerRefs = roster.slice(0, 3);
+                const player1 = roster.find(p => p.bid >= 20) || roster[0];
+                
+                redistributeCredits(5, player1.name);
+                
+                // Check that player objects are still in roster
+                let refsValid = true;
+                playerRefs.forEach(ref => {
+                    if (!roster.includes(ref)) {
+                        refsValid = false;
+                    }
+                });
+
+                this.assert(
+                    refsValid,
+                    'Player object references remain valid',
+                    'Redistribution should modify objects in-place, not replace them'
+                );
+
+                // Test 2: Purchase data structure integrity
+                this.log('Test 2: Purchase data structure contains required fields', 'info');
+                purchases.length = 0;
+                spent = 0;
+                
+                const testPlayer = roster[0];
+                addPurchase(testPlayer.name, testPlayer.bid - 3);
+
+                if (purchases.length > 0) {
+                    const purchase = purchases[0];
+                    this.assert(
+                        purchase.hasOwnProperty('name'),
+                        'Purchase has name field',
+                        'Purchase object should have name'
+                    );
+                    this.assert(
+                        purchase.hasOwnProperty('price'),
+                        'Purchase has price field',
+                        'Purchase object should have price'
+                    );
+                    this.assert(
+                        purchase.hasOwnProperty('savedCredits'),
+                        'Purchase has savedCredits field',
+                        'Purchase object should track saved credits'
+                    );
+                    this.assert(
+                        purchase.hasOwnProperty('redistributionSnapshot'),
+                        'Purchase has redistributionSnapshot field',
+                        'Purchase object should save snapshot for undo'
+                    );
+                    
+                    undoPurchase();
+                }
+
+                // Test 3: Counter consistency
+                this.log('Test 3: Counter values match actual data', 'info');
+                purchases.length = 0;
+                spent = 0;
+                updateCounters();
+                
+                const displayedBudget = parseInt(document.getElementById('budgetLeft').textContent.match(/\d+/)[0]);
+                const expectedBudget = START_BUDGET - spent;
+                
+                this.assert(
+                    displayedBudget === expectedBudget,
+                    'Budget counter matches spent value',
+                    `Expected ${expectedBudget}, displayed ${displayedBudget}`
+                );
+
+                this.log('Data integrity tests completed', 'info');
+            }
+
             // Run all tests
             async runAllTests() {
                 console.clear();
@@ -1664,12 +2256,18 @@
                     this.testSearchFunctionality();
                     this.testBidCalculation();
                     this.testCounters();
+                    this.testEdgeCases();
+                    this.testUndoFunctionality();
                     this.testCreditRedistribution();
                     this.testCreditRedistributionOnLoss();
                     this.testLossScenarios();
                     this.testPurchaseSystem();
+                    this.testCSVExport();
+                    this.testComplexWorkflows();
+                    this.testDataIntegrity();
                 } catch (error) {
                     this.log(`Test suite error: ${error.message}`, 'fail');
+                    console.error('Full error:', error);
                 } finally {
                     this.cleanup();
                 }
@@ -1700,12 +2298,21 @@
 
         console.log('🧪 Fantasy Football Test Suite loaded!');
         console.log('📋 Usage:');
-        console.log('  runTests() - Run all tests');
-        console.log('  FantasyTester.testSearchFunctionality() - Run specific test');
-        console.log('  FantasyTester.testCreditRedistributionOnLoss() - Test new loss redistribution');
-        console.log('  FantasyTester.testLossScenarios() - Test complete loss scenarios');
+        console.log('  runTests() - Run all tests (recommended)');
         console.log('');
-        console.log('⚠️  Make sure to unlock the app first!');
+        console.log('📚 Available test modules:');
+        console.log('  FantasyTester.testSearchFunctionality() - Player search tests');
+        console.log('  FantasyTester.testCreditRedistribution() - Purchase redistribution tests');
+        console.log('  FantasyTester.testCreditRedistributionOnLoss() - Loss redistribution tests');
+        console.log('  FantasyTester.testLossScenarios() - Complete loss scenarios');
+        console.log('  FantasyTester.testUndoFunctionality() - Undo with rollback tests');
+        console.log('  FantasyTester.testEdgeCases() - Edge cases and error handling');
+        console.log('  FantasyTester.testComplexWorkflows() - Multi-step workflows');
+        console.log('  FantasyTester.testDataIntegrity() - Data consistency tests');
+        console.log('  FantasyTester.testCSVExport() - CSV export validation');
+        console.log('');
+        console.log('⚠️  Make sure to unlock the app first with passphrase: "dammi un Braulio"');
+        console.log('🔍 Total test coverage: 60+ assertions across 13 test modules');
     </script>
 
 </body>
