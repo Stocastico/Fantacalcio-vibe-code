@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8" />
+<title>Fantacalcio – Helper d’Asta (autopilota v8, offuscato)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>:root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+body { margin: 24px; } h1 { margin-bottom: 8px; } .muted { color:#666; font-size: 13px; }
+.pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eee; font-size:12px; margin-right:6px; }
+.row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap: wrap; }
+.card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.warn { color:#9a3412; } .ok { color:#166534; } .out { margin-top: 10px; padding: 10px 12px; background:#f6f6f6; border-radius: 8px; min-height: 40px; white-space: pre-wrap; }
+label { font-size: 14px; display:block; margin-bottom: 6px; color:#333; }
+input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 10px 12px; border:1px solid #ccc; border-radius: 8px; }
+button { padding: 10px 14px; border: 1px solid #222; border-radius: 8px; background: #111; color: #fff; cursor: pointer; }
+button.secondary { background: #fff; color:#111; } button:disabled { opacity: .6; cursor: not-allowed; }
+.layout { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 980px) { .layout { grid-template-columns: 1fr 340px; align-items: start; } .sidebar { position: sticky; top: 12px; } }
+ul.list { list-style: none; padding-left: 0; margin: 8px 0 0; }
+ul.list li { padding: 6px 8px; border-bottom: 1px dashed #ddd; }
+</style></head>
+<body>
+<h1>Fantacalcio – Helper d’Asta (autopilota v8)</h1>
+<p class="muted">Lista <strong>offuscata</strong> con passphrase. Digita la passphrase con qualsiasi numero di spazi (li normalizzo io).</p>
+<div id="locked" class="card" style="max-width:580px;">
+  <h3>Sblocca la lista</h3>
+  <label for="pw">Passphrase</label>
+  <input id="pw" type="password" placeholder="Inserisci passphrase" />
+  <div class="row">
+    <button id="btnUnlock">Sblocca</button>
+    <label class="muted" style="display:flex;align-items:center;gap:6px;">
+      <input id="showPw" type="checkbox" /> Mostra passphrase
+    </label>
+  </div>
+  <div id="outUnlock" class="out"></div>
+  <p class="muted">Formato canonico: <code>dammi␠un␠Braulio</code> (ma spazi extra OK).</p>
+</div>
+<div id="app" style="display:none;">
+  <div class="row">
+    <span class="pill" id="countP">P: 0</span>
+    <span class="pill" id="countD">D: 0</span>
+    <span class="pill" id="countC">C: 0</span>
+    <span class="pill" id="countA">A: 0</span>
+    <span class="pill" id="sumNow">Somma tetti: 0</span>
+    <span class="pill" id="budgetLeft">Crediti residui: 500</span>
+  </div>
+  <div class="layout" style="margin-top:16px;">
+    <div>
+      <div class="grid">
+        <section class="card">
+          <h3>1) Cerca giocatore</h3>
+          <label for="q">Nome giocatore</label>
+          <input id="q" type="text" placeholder="es. Lautaro, Vlahović, Zaccagni..." />
+          <div class="row">
+            <button id="btnCheck">Cerca nella mia lista</button>
+            <button id="btnClear" class="secondary">Pulisci</button>
+          </div>
+          <div id="outCheck" class="out"></div>
+        </section>
+        <section class="card">
+          <h3>2) Rimuovi giocatore</h3>
+          <label for="rem">Nome giocatore da togliere</label>
+          <input id="rem" type="text" placeholder="es. Doig, Valeri..." />
+          <div class="row"><button id="btnRemove">Rimuovi dalla lista</button></div>
+          <div id="outRemove" class="out"></div>
+        </section>
+        <section class="card">
+          <h3>3) Estrai un giocatore a caso</h3>
+          <div class="row">
+            <button id="btnRandom">Estrai giocatore</button>
+            <button id="btnShowLeft" class="secondary">Mostra lista rimanente</button>
+            <button id="btnReset" class="secondary" title="Ripristina lista originale">Reset</button>
+          </div>
+          <div id="outRandom" class="out"></div>
+          <details id="leftWrap" style="display:none; margin-top:8px;">
+            <summary>Lista rimanente</summary>
+            <div id="leftList" class="muted"></div>
+          </details>
+        </section>
+      </div>
+    </div>
+    <aside class="sidebar">
+      <section class="card">
+        <h3>Acquisti live</h3>
+        <p class="muted">Inserisci nome e prezzo pagato. Aggiorno speso e residuo automaticamente.</p>
+        <label for="buyName">Nome</label>
+        <input id="buyName" type="text" placeholder="es. Lautaro Martínez" />
+        <label for="buyPrice">Prezzo pagato</label>
+        <input id="buyPrice" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 84" />
+        <div class="row">
+          <button id="btnAddBuy">Aggiungi acquisto</button>
+          <button id="btnUndoBuy" class="secondary">Annulla ultimo</button>
+          <button id="btnExportCSV" class="secondary">Esporta CSV</button>
+        </div>
+        <div id="outBuy" class="out"></div>
+        <h4 style="margin-top:12px;">Rosa acquistata</h4>
+        <ul id="purchasesList" class="list"></ul>
+        <div class="row" style="margin-top:8px;">
+          <span class="pill" id="spentPill">Speso: 0</span>
+          <span class="pill" id="leftPill">Residuo: 500</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <details class="card" style="margin-top:16px;">
+    <summary>Avanzato: re-offusca con nuova passphrase</summary>
+    <p class="muted">Genera una nuova stringa OBF da incollare sulla variabile <code>OBF</code>.</p>
+    <label for="newpw">Nuova passphrase</label>
+    <input id="newpw" type="password" placeholder="Nuova passphrase" />
+    <div class="row"><button id="btnReObf">Genera nuova stringa offuscata</button></div>
+    <div id="outReObf" class="out"></div>
+  </details>
+</div>
+
+<script>
+const OBF = "BueD+8FfsC3ZOorcIq9LSmWQDRmNoq2d16LwFFPBCl8U0IPHmG93hsGGpegbbhb+QuNVXJVVbVon1zopU88KTc2Yg+/JVm1F1pVw9ti6PUllkBsZb6izmSnR8PBTB1dpEI6br7AUdy0Bgaid8IFZCHuQT1iImGNy18IvNKH2S2we4MKvjBS9egt9ZrXYkP4IItBKWz1tcm0ylEnmn/ZVYs2mg9TBZr90wURm7SW4Qf46kCUZR1WjoRmKCPVlEhR4zdrC+sUUhS3vh7feHm4I/nLdTVw9bWN815TwJpr5Cjfcnd652xS5bAx9ZrXYnD1OaeFKGUdVs6chzfD+U9kKKc3OyvGCLHw7HES/nSStSUEiqAM7ipyoWuGKQDOd+go3zbCDuYJUtG/BUnWrM3hX/m7PTlw9bWOOFtQzNpq3FB8d283ygixtT8FEZt0fsP4WOOsNcj2hoqUaigjmi/ZYbQyOja/SYbdwwVJmv9h4/j5p0gMxU7Bts9fWLzGWtyIf7dHN+cFguoEAOnCdKLtIQSKoAzs9X2OaHszw/mLGZSkmjs/uzVdtRcFlp88luUVKYecDIz2lsKQaigjmdLcUHw3Vxa+aJoCIy5Nm6Re5Qf46kCxmiqOunR7WMzaktxQfHdvN8oIsbU7BRGbdH7D+FjKmXiOWVa+ZIs3w/lPbTW8S4dT8zhR3LRGHsODYhv4fIpoDWYSXY3LnmkvwrLdWXhjRg8eCQqx+AISt3th4/k5v2kYZVVWEWuGKMC2VtyIu5OmNCIJgrHgEOn6dA7dERXTPU3B8oWNk19o9MJa3Ih/ujo2vwluvLdlJfPjix/5KYdtGGVVVg6oa2zEtkgNRaxSOja/SYbdwwVJmvth4/j5p0gMxTGi+ZDCKPCWe+go3za7C+cRTuYUIOnCdKLtIQSKoAzo9X2OaHszw/mLIZSkmjs/uzVdtRcFhsOQZbgj+ct1NXD1tY3vXlPAmmvkKN9yc3rnbFLlsDH1mtdiYPVF0z1NmO4CiqikrezKWDwopzd7Q+cUUhS3gOnCdGLVA/jqnEXRHrmOmFtUz5mu3PGUg3sL6gh5tfQ6EqZ3wbh3+LJBDYH9Ve23l5fo/UwNJahCOm6+2XqxzDo6tPz1uCP5y3U1cPW1jedeU8Caa+Qo33qHeudsUuWwMfWa12J8/PW3PRFp8VW1aJ9c6KVPPCj7NmIPvyVZtRdFKwacxbko9bdMDMT2Cs6sk1DcymrcUHx3bzfKCLG1MwURm3R+w/hYxoV4jllWvmSLN8P5T70lgDs3I+8kUdy0Rh7Dg2Ib+HSKaA1mEl2Ny5ptLIQ==";
+
+async function sha256Bytes(str) { const enc = new TextEncoder().encode(str); const hash = await crypto.subtle.digest("SHA-256", enc); return new Uint8Array(hash); }
+function b64ToBytes(b64) { const bin = atob(b64); const out = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i); return out; }
+function bytesToB64(bytes) { let bin = ""; for (let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]); return btoa(bin); }
+function deobfuscate(obfBytes, keyBytes) { const out = new Uint8Array(obfBytes.length); for (let i=0;i<obfBytes.length;i++) out[i] = (obfBytes[i] - keyBytes[i % keyBytes.length] + 256) % 256; return out; }
+function obfuscate(plainBytes, keyBytes) { const out = new Uint8Array(plainBytes.length); for (let i=0;i<plainBytes.length;i++) out[i] = (plainBytes[i] + keyBytes[i % keyBytes.length]) % 256; return out; }
+
+let ORIGINAL = null, roster = null;
+const START_BUDGET = 500; let purchases = []; let spent = 0;
+const norm = s => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+function sumBid(list) { return list.reduce((acc, x) => acc + (x.bid || 0), 0); }
+function countsByRole(list) { return list.reduce((m, x) => (m[x.role]=(m[x.role]||0)+1, m), { P:0, D:0, C:0, A:0 }); }
+function updateCounters() { const c = countsByRole(roster); document.getElementById("countP").textContent = `P: ${c.P}`; document.getElementById("countD").textContent = `D: ${c.D}`; document.getElementById("countC").textContent = `C: ${c.C}`; document.getElementById("countA").textContent = `A: ${c.A}`; document.getElementById("sumNow").textContent = `Somma tetti: ${sumBid(roster)}`; document.getElementById("budgetLeft").textContent = `Crediti residui: ${START_BUDGET - spent}`; document.getElementById("spentPill").textContent = `Speso: ${spent}`; document.getElementById("leftPill").textContent = `Residuo: ${START_BUDGET - spent}`; }
+function formatPlayer(p) { return `${p.name} — ${p.role} — tetto offerta: ${p.bid}`; }
+function listRemaining() { const order = { P:0, D:1, C:2, A:3 }; const sorted = [...roster].sort((a,b) => (order[a.role]-order[b.role]) || (b.bid - a.bid) || a.name.localeCompare(b.name)); return sorted.map(formatPlayer).join("\n"); }
+function findCandidates(query, inList = roster) { const q = norm(query); if (!q) return []; const exact = inList.filter(p => norm(p.name) === q); if (exact.length === 1) return exact; const parts = inList.filter(p => norm(p.name).includes(q)); return parts; }
+function addPurchase() { const name = (document.getElementById("buyName").value || "").trim(); const priceStr = (document.getElementById("buyPrice").value || "").trim(); const out = document.getElementById("outBuy"); if (!name) { out.innerHTML = "❌ Inserisci un nome."; return; } if (!priceStr) { out.innerHTML = "❌ Inserisci un prezzo."; return; } const price = Number(priceStr); if (!Number.isFinite(price) || price < 0) { out.innerHTML = "❌ Prezzo non valido."; return; } const priceInt = Math.round(price); purchases.push({ name, price: priceInt }); spent += priceInt; const li = document.createElement("li"); li.textContent = `${name} — ${priceInt}`; document.getElementById("purchasesList").appendChild(li); out.innerHTML = `✅ Aggiunto "${name}" per ${priceInt}`; document.getElementById("buyName").value = ""; document.getElementById("buyPrice").value = ""; updateCounters(); }
+function undoPurchase() { const out = document.getElementById("outBuy"); if (purchases.length === 0) { out.innerHTML = "⚠️ Nessun acquisto da annullare."; return; } const last = purchases.pop(); spent -= last.price; const list = document.getElementById("purchasesList"); if (list.lastChild) list.removeChild(list.lastChild); out.innerHTML = `↩️ Annullato "${last.name}" per ${last.price}`; updateCounters(); }
+function exportCSV() { const out = document.getElementById("outBuy"); if (purchases.length === 0) { out.innerHTML = "⚠️ Nessun acquisto da esportare."; return; } const rows = [["Nome","Prezzo"]].concat(purchases.map(p => [p.name, String(p.price)])); rows.push(["Totale speso", String(spent)]); rows.push(["Residuo", String(START_BUDGET - spent)]); const csv = rows.map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n"); const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; const dateStr = new Date().toISOString().slice(0,10); a.download = `acquisti_fantacalcio_${dateStr}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); out.innerHTML = "📦 CSV esportato."; }
+const $ = sel => document.querySelector(sel);
+document.getElementById("showPw").addEventListener("change", e => { const f = document.getElementById("pw"); f.type = e.target.checked ? "text" : "password"; f.focus(); });
+document.getElementById("btnUnlock").addEventListener("click", async () => { const raw = document.getElementById("pw").value || ""; const pw = raw.normalize("NFC").replace(/\s+/g, " ").trim(); const out = document.getElementById("outUnlock"); try { const key = await sha256Bytes(pw); const obf = b64ToBytes(OBF); const plain = deobfuscate(obf, key); const text = new TextDecoder().decode(plain); const parsed = JSON.parse(text); if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Formato elenco non valido."); ORIGINAL = parsed; roster = JSON.parse(JSON.stringify(ORIGINAL)); document.getElementById("locked").style.display = "none"; document.getElementById("app").style.display = ""; updateCounters(); document.getElementById("leftList").textContent = listRemaining(); } catch (e) { console.error(e); out.innerHTML = "❌ <span class='warn'>Passphrase errata (attenzione a maiuscole/minuscole).</span>"; } });
+document.addEventListener("click", (ev) => { const id = ev.target && ev.target.id; if (!id) return;
+  if (id === "btnCheck") { const q = document.getElementById("q").value; const out = document.getElementById("outCheck"); const matches = findCandidates(q); if (matches.length === 0) out.innerHTML = `❌ <span class="warn">"\${q}" non è nella tua lista attuale.</span>`; else if (matches.length > 1) out.textContent = `⚠️ Trovati più match:\n- \${matches.map(m => m.name).join("\n- ")}`; else out.innerHTML = `✅ <span class="ok">\${formatPlayer(matches[0])}</span>`; }
+  if (id === "btnClear") { document.getElementById("q").value = ""; document.getElementById("outCheck").textContent = ""; document.getElementById("q").focus(); }
+  if (id === "btnRemove") { const q = document.getElementById("rem").value; const out = document.getElementById("outRemove"); const matches = findCandidates(q); if (matches.length === 0) out.innerHTML = `❌ <span class="warn">"\${q}" non è nella lista (o è già stato rimosso).</span>`; else if (matches.length > 1) out.textContent = `⚠️ Più match trovati, specifica meglio:\n- \${matches.map(m => m.name).join("\n- ")}`; else { const targetNameNorm = norm(matches[0].name); const before = roster.length; roster = roster.filter(p => norm(p.name) !== targetNameNorm); const removed = before - roster.length; out.innerHTML = removed ? `🗑️ Rimosso: <strong>\${matches[0].name}</strong> — tetto \${matches[0].bid}` : `❌ <span class="warn">Nessuna rimozione effettuata.</span>`; updateCounters(); if (document.getElementById("leftWrap").style.display !== "none") document.getElementById("leftList").textContent = listRemaining(); } }
+  if (id === "btnRandom") { const out = document.getElementById("outRandom"); if (!roster || roster.length === 0) out.innerHTML = `🎉 Lista vuota: nessun giocatore rimanente.`; else { const i = Math.floor(Math.random() * roster.length); const p = roster[i]; out.innerHTML = `🎯 <strong>\${p.name}</strong> — ruolo \${p.role} — tetto \${p.bid}`; } }
+  if (id === "btnShowLeft") { const wrap = document.getElementById("leftWrap"); const list = document.getElementById("leftList"); if (wrap.style.display === "none") { list.textContent = listRemaining(); wrap.style.display = ""; } else { wrap.style.display = "none"; } }
+  if (id === "btnReset") { if (!confirm("Ripristinare la lista originale (500 totali)?")) return; roster = JSON.parse(JSON.stringify(ORIGINAL)); updateCounters(); document.getElementById("leftList").textContent = listRemaining(); document.getElementById("outRemove").textContent = ""; document.getElementById("outRandom").textContent = ""; document.getElementById("outCheck").textContent = ""; }
+  if (id === "btnReObf") { const newpw = document.getElementById("newpw").value || ""; const out = document.getElementById("outReObf"); if (!newpw) { out.innerHTML = "❌ Inserisci una nuova passphrase."; return; } (async () => { try { const key = await sha256Bytes(newpw); const text = JSON.stringify(ORIGINAL); const plain = new TextEncoder().encode(text); const obf = obfuscate(plain, key); const b64 = bytesToB64(obf); out.innerHTML = "✅ Nuova stringa OBF (copiala nella variabile <code>OBF</code>):\n\n" + b64; } catch (e) { console.error(e); out.innerHTML = "❌ Errore nella generazione."; } })(); }
+  if (id === "btnAddBuy") { addPurchase(); }
+  if (id === "btnUndoBuy") { undoPurchase(); }
+  if (id === "btnExportCSV") { exportCSV(); }
+});
+</script>
+</body></html>
