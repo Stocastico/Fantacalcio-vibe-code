@@ -15,7 +15,7 @@ Non serve build, non serve server: apri i file `.html` nel browser.
 ### Quale pagina apro?
 
 | Ti serve… | Apri… | Note |
-|---|---|---|
+| --- | --- | --- |
 | Helper d’asta con lista **offuscata** + passphrase | [index.html](index.html) | Richiede i file JS/CSS accanto (già inclusi nel repo) |
 | Helper d’asta offuscato **single-file** | [fantacalcio-standalone.html](fantacalcio-standalone.html) | Tutto in un file |
 | Market auction (pool unico) con **max nascosti** | [market-auction-standalone.html](market-auction-standalone.html) | Consigliato per portabilità; alternativa modulare: [market-auction.html](market-auction.html) |
