@@ -8,7 +8,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Fantacalcio 2026/27 – Mercato di riparazione</title>
+    <title>Fantacalcio 2026/27 – Helper d'Asta</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         /*
@@ -475,70 +475,85 @@
 
 <body>
     <header class="page-head">
-        <h1>Mercato di riparazione <span class="season">2026/27</span></h1>
+        <h1>Helper d'Asta <span class="season">2026/27</span></h1>
         <p class="muted">
-            Pool unico, nessun ruolo. I tuoi massimali non compaiono mai a schermo:
-            l'app dice solo se rilanciare o fermarti.
-            <a href="index-standalone.html">← Torna all'helper d'asta</a>
+            Lista in chiaro, tutto offline, stato salvato nel browser.
+            <a href="market-auction-standalone.html">Vai al mercato di riparazione →</a>
         </p>
     </header>
 
-    <div class="row">
-        <span class="pill" id="spentPill">Speso: 0</span>
-        <span class="pill" id="leftPill">Residuo: 0</span>
-        <span class="pill" id="poolPill">In lista: 0</span>
+    <div id="banner" class="banner" hidden></div>
+
+    <div class="row" id="counters">
+        <span class="pill" id="countP">P: 0</span>
+        <span class="pill" id="countD">D: 0</span>
+        <span class="pill" id="countC">C: 0</span>
+        <span class="pill" id="countA">A: 0</span>
+        <span class="pill" id="sumNow">Somma tetti: 0</span>
+        <span class="pill" id="budgetLeft">Crediti residui: 0</span>
+        <span class="pill" id="playersLeft">Giocatori rimanenti: 0</span>
     </div>
 
     <div class="layout" style="margin-top:16px;">
         <div>
             <div class="grid">
                 <section class="card">
-                    <h3>Asta</h3>
+                    <h3>1) Scegli chi chiamare</h3>
+
+                    <p class="muted">Estrai un giocatore a caso dalla tua lista e apri l'asta partendo da 1 credito.</p>
                     <div class="row">
-                        <button id="btnNextCall" title="Chiama il giocatore col massimale più alto rimasto">Prossimo</button>
-                        <button id="btnResetAll" class="secondary" title="Ripristina il pool e azzera gli acquisti">Reset</button>
+                        <button id="btnRandom">Estrai e inizia asta</button>
+                        <button id="btnNext" class="secondary" title="Chiama il giocatore col tetto più alto rimasto">Chiama il più caro</button>
+                    </div>
+                    <div id="outRandom" class="out" aria-live="polite"></div>
+
+                    <div class="separator">Oppure</div>
+
+                    <label for="q">Cerca per nome</label>
+                    <input id="q" type="text" placeholder="es. Lautaro, Vlahovic, Zaccagni…" autocomplete="off" />
+                    <div class="row">
+                        <button id="btnCheck">Cerca nella mia lista</button>
+                        <button id="btnClear" class="secondary">Pulisci</button>
                     </div>
                     <div id="outCheck" class="out" aria-live="polite"></div>
-
-                    <div id="auctionSection" hidden>
-                        <h4>🏷️ Asta in corso</h4>
-                        <div id="playerInfo" class="player-info"></div>
-
-                        <label for="currentOffer">La mia offerta</label>
-                        <input id="currentOffer" type="number" inputmode="numeric" min="1" step="1" placeholder="1" />
-
-                        <div class="row">
-                            <button id="btnSuggest">Verifica offerta</button>
-                            <button id="btnWon" class="secondary">✅ Vinto</button>
-                            <button id="btnLost" class="secondary">😞 Perso</button>
-                        </div>
-                        <div id="outAuction" class="out" aria-live="polite"></div>
-                    </div>
+                    <p class="muted">Se il nome è parziale o ambiguo ti mostro i match possibili.</p>
                 </section>
 
-                <section class="card">
-                    <h3>Offerte degli altri</h3>
-                    <p class="muted">Scrivi chi è in asta e a quanto sono arrivati: ti dico se rilanciare o lasciar perdere.</p>
+                <section class="card" id="auctionSection" hidden>
+                    <h3>2) 🏷️ Asta in corso</h3>
+                    <div id="playerInfo" class="player-info"></div>
 
-                    <label for="offerName">Nome giocatore</label>
-                    <input id="offerName" type="text" placeholder="es. Malen" autocomplete="off" />
-
-                    <label for="offerCurrent" style="margin-top:12px;">Offerta attuale</label>
-                    <input id="offerCurrent" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 25" />
-
+                    <label for="currentOffer">Offerta attuale sul tavolo</label>
+                    <input id="currentOffer" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 25" />
                     <div class="row">
-                        <button id="btnAddOffer" class="secondary">Calcola la mia offerta</button>
-                        <button id="btnClearOffers" class="secondary">Pulisci storico</button>
+                        <button id="btnCalculateBid">Calcola la mia offerta</button>
                     </div>
+                    <div id="outAuction" class="out" aria-live="polite"></div>
 
-                    <ul id="offersList" class="list compact"></ul>
-                    <div id="outOffers" class="out" aria-live="polite"></div>
+                    <label for="finalPrice" style="margin-top:16px;">Prezzo finale pagato</label>
+                    <input id="finalPrice" type="number" inputmode="numeric" min="0" step="1"
+                        placeholder="si compila da solo col rilancio consigliato" />
+                    <div class="row">
+                        <button id="btnPlayerWon">✅ Preso io</button>
+                        <button id="btnPlayerLost" class="secondary">😞 Andato ad altri</button>
+                        <button id="btnCancelAuction" class="secondary">Chiudi senza fare nulla</button>
+                    </div>
                 </section>
             </div>
 
             <section class="card" style="margin-top:20px;">
-                <h3>Impostazioni</h3>
+                <h3>Lista e impostazioni</h3>
+
                 <div class="row">
+                    <button id="btnShowLeft" class="emergency">⚠️ Mostra lista rimanente</button>
+                    <button id="btnReset" class="secondary" title="Ripristina la lista di partenza e azzera gli acquisti">Reset totale</button>
+                </div>
+                <details id="leftWrap" style="margin-top:12px;" hidden>
+                    <summary>Giocatori ancora in lista</summary>
+                    <ul id="leftList" class="list compact"></ul>
+                </details>
+
+                <div class="row" style="margin-top:20px;">
                     <div style="flex:1; min-width:200px;">
                         <label for="budgetInput">Budget totale</label>
                         <input id="budgetInput" type="number" inputmode="numeric" min="0" step="1" />
@@ -551,10 +566,15 @@
 
         <aside class="sidebar">
             <section class="card">
-                <h3>Acquisti</h3>
-                <p class="muted">Giocatori vinti, con il prezzo pagato.</p>
+                <h3>Rosa acquistata</h3>
+                <p class="muted">Chi hai preso e a quanto.</p>
 
                 <ul id="purchasesList" class="list"></ul>
+
+                <div class="row">
+                    <span class="pill" id="spentPill">Speso: 0</span>
+                    <span class="pill" id="leftPill">Residuo: 0</span>
+                </div>
 
                 <div class="row">
                     <button id="btnUndo" class="secondary">↩️ Annulla ultima azione</button>
@@ -565,6 +585,7 @@
             </section>
         </aside>
     </div>
+
 
     <script>
         /**
@@ -1315,91 +1336,135 @@
     </script>
     <script>
         /**
-         * Pool per il mercato di riparazione — stagione 2026/27.
+         * Lista giocatori per l'asta principale — stagione 2026/27.
          *
-         * ⚠️ SEGNAPOSTO: valori dell'ultima riparazione 2025/26. Aggiornali prima del
-         * prossimo mercato.
+         * ⚠️ SEGNAPOSTO: al momento qui c'è la lista usata nella stagione 2025/26,
+         * riportata in chiaro come base di partenza. Sostituiscila con la tua lista
+         * nuova prima dell'asta.
          *
-         * Qui non ci sono ruoli: è un pool unico, i giocatori vengono chiamati in
-         * ordine di massimale decrescente col pulsante "Prossimo".
+         * Formato di ogni riga:
+         *   { name: 'Cognome',  role: 'P' | 'D' | 'C' | 'A',  max: <crediti> }
          *
-         * I massimali non compaiono mai a schermo: l'app mostra solo il nome e ti dice
-         * se rilanciare o fermarti. Questo serve quando qualcuno ti guarda lo schermo,
-         * non a nascondere il file — chiunque apra questo sorgente li vede.
+         *   name  come lo chiami tu; la ricerca ignora accenti e maiuscole
+         *   role  P portiere, D difensore, C centrocampista, A attaccante
+         *   max   il TUO tetto di spesa per quel giocatore, non il prezzo di listino
+         *
+         * Regola pratica: la somma dei `max` dovrebbe fare esattamente AUCTION_BUDGET.
+         * Se non torna, l'app te lo segnala in alto con un avviso — non è un errore
+         * bloccante, ma vuol dire che stai pianificando più o meno di quello che hai.
+         *
+         * Dalla stagione 2025/26 è cambiato questo: la lista non è più offuscata con
+         * passphrase. L'asta si fa in presenza, quindi non c'è niente da nascondere
+         * a chi apre il sorgente. Occhio però: questo repo è pubblico.
          */
         ;(function (global) {
             'use strict';
 
-            const MARKET_BUDGET = 416;
+            const AUCTION_BUDGET = 500;
 
-            const MARKET_POOL = [
-                { name: 'Orban', max: 131 },
-                { name: 'Malen', max: 127 },
-                { name: 'Zielinski', max: 45 },
-                { name: 'Cambiaghi', max: 43 },
-                { name: 'Ostigard', max: 20 },
-                { name: 'Ramon', max: 20 },
-                { name: 'Muric', max: 5 },
+            const PLAYERS = [
+                // Portieri
+                { name: 'Falcone', role: 'P', max: 8 },
+                { name: 'Butez', role: 'P', max: 7 },
+                { name: 'Turati', role: 'P', max: 5 },
+
+                // Difensori
+                { name: 'Zappacosta', role: 'D', max: 15 },
+                { name: 'Gatti', role: 'D', max: 14 },
+                { name: 'Posch', role: 'D', max: 11 },
+                { name: 'Bellanova', role: 'D', max: 11 },
+                { name: 'Parisi', role: 'D', max: 10 },
+                { name: 'Doig', role: 'D', max: 10 },
+                { name: 'Valeri', role: 'D', max: 8 },
+                { name: 'Zappa', role: 'D', max: 8 },
+
+                // Centrocampisti
+                { name: 'McTominay', role: 'C', max: 45 },
+                { name: 'Koopmeiners', role: 'C', max: 28 },
+                { name: 'Ferguson', role: 'C', max: 22 },
+                { name: 'Pasalic', role: 'C', max: 19 },
+                { name: 'Mkhitaryan', role: 'C', max: 18 },
+                { name: 'Brescianini', role: 'C', max: 15 },
+                { name: 'Baldanzi', role: 'C', max: 13 },
+                { name: 'Ilic', role: 'C', max: 10 },
+
+                // Attaccanti
+                { name: 'Lautaro Martínez', role: 'A', max: 90 },
+                { name: 'Thuram', role: 'A', max: 50 },
+                { name: 'Vlahović', role: 'A', max: 35 },
+                { name: 'Scamacca', role: 'A', max: 22 },
+                { name: 'Orsolini', role: 'A', max: 13 },
+                { name: 'Zaccagni', role: 'A', max: 13 },
             ];
 
-            const api = { MARKET_BUDGET, MARKET_POOL };
+            const api = { AUCTION_BUDGET, PLAYERS };
 
             global.FC = global.FC || {};
-            global.FC.marketData = api;
+            global.FC.playersData = api;
             if (typeof module !== 'undefined' && module.exports) module.exports = api;
         })(typeof globalThis !== 'undefined' ? globalThis : this);
     </script>
     <script>
         /**
-         * Mercato di riparazione: stesso motore dell'asta principale, UI diversa.
-         *
-         * Differenze rispetto a index.html:
-         *  - pool unico senza ruoli
-         *  - i massimali non vengono MAI scritti a schermo (li vede solo il codice)
-         *  - i crediti risparmiati si dividono in parti uguali fra i tre più cari
+         * Helper d'asta principale: collega il motore condiviso alla pagina index.html.
+         * Qui dentro c'è solo interfaccia — tutte le regole stanno in core/engine.js.
          */
         ;(function (global) {
             'use strict';
 
             const { engine: engineApi, credits, text } = global.FC;
-            const { MARKET_POOL, MARKET_BUDGET } = global.FC.marketData;
-            const { toInt } = text;
+            const { PLAYERS, AUCTION_BUDGET } = global.FC.playersData;
 
             const $ = (id) => document.getElementById(id);
 
             const engine = engineApi.createEngine({
-                budget: MARKET_BUDGET,
-                players: MARKET_POOL,
-                redistribution: { strategy: 'even', topN: 3, min: 1 },
-                storageKey: 'fantacalcio:riparazione:2026-2027',
+                budget: AUCTION_BUDGET,
+                players: PLAYERS,
+                redistribution: { strategy: 'spread', min: 1 },
+                storageKey: 'fantacalcio:asta:2026-2027',
                 storageVersion: 1,
-                easterEgg: false,
-                hideMaxInCsv: true, // il CSV non deve rivelare i massimali
+                easterEgg: true,
             });
 
+            /** Giocatore attualmente in asta e ultimo rilancio consigliato per lui. */
             let current = null;
+            let suggested = null;
 
+            // --- helper di output ---------------------------------------------------
+
+            /**
+             * Scrive un messaggio in un riquadro .out. Usa textContent per i nomi:
+             * la lista è un file che modifichi a mano, ma non è un buon motivo per
+             * iniettare HTML arbitrario nella pagina.
+             */
             function say(el, message, tone) {
                 el.textContent = message;
                 el.classList.remove('is-ok', 'is-warn', 'is-error');
                 if (tone) el.classList.add(`is-${tone}`);
             }
 
-            /** Storico delle offerte altrui, tenuto nello stato persistito del motore. */
-            function offers() {
-                if (!Array.isArray(engine.extra.offers)) engine.extra.offers = [];
-                return engine.extra.offers;
+            function describePlayer(p) {
+                return p.role ? `${p.name} (${p.role})` : p.name;
             }
 
             // --- rendering ----------------------------------------------------------
 
             function render() {
+                const c = engine.countsByRole();
+                $('countP').textContent = `P: ${c.P}`;
+                $('countD').textContent = `D: ${c.D}`;
+                $('countC').textContent = `C: ${c.C}`;
+                $('countA').textContent = `A: ${c.A}`;
+                $('sumNow').textContent = `Somma tetti: ${engine.sumMax()}`;
+                $('budgetLeft').textContent = `Crediti residui: ${engine.left()}`;
+                $('playersLeft').textContent = `Giocatori rimanenti: ${engine.pool.length}`;
                 $('spentPill').textContent = `Speso: ${engine.spent}`;
                 $('leftPill').textContent = `Residuo: ${engine.left()}`;
-                $('poolPill').textContent = `In lista: ${engine.pool.length}`;
                 $('budgetInput').value = String(engine.budget);
+
                 renderPurchases();
-                renderOffers();
+                renderRemaining();
+                renderBanner();
             }
 
             function renderPurchases() {
@@ -1415,43 +1480,60 @@
                 for (const p of engine.purchases) {
                     const li = document.createElement('li');
                     const label = document.createElement('span');
-                    label.textContent = p.name;
+                    label.textContent = describePlayer(p);
                     const price = document.createElement('strong');
                     price.textContent = String(p.price);
+                    if (p.max !== null && p.max !== undefined && p.price > p.max) {
+                        price.classList.add('over');
+                        price.title = `Sopra il tuo tetto di ${p.max}`;
+                    }
                     li.append(label, price);
                     list.appendChild(li);
                 }
             }
 
-            /** Nota: qui non si stampa mai nulla che riveli un massimale. */
-            function renderOffers() {
-                const list = $('offersList');
+            function renderRemaining() {
+                const list = $('leftList');
                 list.textContent = '';
-                const labels = {
-                    bid: (o) => `rilancia a ${o.suggestion}`,
-                    stop: () => 'STOP, massimo raggiunto',
-                    unknown: () => 'non ci interessa',
-                    'already-bought': () => 'già preso',
-                    invalid: () => 'offerta non valida',
-                };
-                for (const o of offers().slice().reverse()) {
+                for (const p of text.sortByRole(engine.pool)) {
                     const li = document.createElement('li');
                     const label = document.createElement('span');
-                    label.textContent = `${o.name} @ ${o.currentOffer}`;
-                    const verdict = document.createElement('strong');
-                    verdict.textContent = (labels[o.status] || (() => o.status))(o);
-                    if (o.status !== 'bid') verdict.classList.add('over');
-                    li.append(label, verdict);
+                    label.textContent = describePlayer(p);
+                    const max = document.createElement('strong');
+                    max.textContent = String(p.max);
+                    li.append(label, max);
                     list.appendChild(li);
                 }
             }
 
-            // --- asta ---------------------------------------------------------------
+            /**
+             * Avvisa quando "somma tetti + speso" non fa più il budget. Con la
+             * ridistribuzione attiva le due cose devono coincidere: se non coincidono
+             * o la lista di partenza non quadrava, o dei crediti non sono stati
+             * assorbiti perché la lista si è svuotata.
+             */
+            function renderBanner() {
+                const banner = $('banner');
+                const diff = engine.allocated() - engine.budget;
+                if (diff === 0) {
+                    banner.hidden = true;
+                    return;
+                }
+                banner.hidden = false;
+                banner.className = 'banner ' + (diff > 0 ? 'banner-warn' : 'banner-info');
+                banner.textContent = diff > 0
+                    ? `⚠️ Stai pianificando ${diff} crediti più del budget: somma tetti ${engine.sumMax()} + speso ${engine.spent} = ${engine.allocated()}, budget ${engine.budget}.`
+                    : `ℹ️ Ti restano ${-diff} crediti non assegnati a nessun giocatore in lista.`;
+            }
 
-            function openAuction(player) {
+            // --- gestione asta ------------------------------------------------------
+
+            function openAuction(player, startOffer) {
                 current = player;
-                $('playerInfo').textContent = player.name;
-                $('currentOffer').value = '1';
+                suggested = null;
+                $('playerInfo').textContent = describePlayer(player);
+                $('currentOffer').value = startOffer === undefined ? '' : String(startOffer);
+                $('finalPrice').value = '';
                 say($('outAuction'), '');
                 $('auctionSection').hidden = false;
                 $('auctionSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1460,107 +1542,154 @@
 
             function closeAuction() {
                 current = null;
+                suggested = null;
                 $('auctionSection').hidden = true;
             }
 
-            /**
-             * Qui il campo è "la mia offerta", non l'offerta degli altri: si controlla
-             * solo che il valore stia dentro il massimale, senza mostrarlo.
-             */
-            function checkOwnBid() {
-                if (!current) return { ok: false, message: 'Nessun giocatore in asta.' };
-                const raw = ($('currentOffer').value || '').trim();
-                const bid = raw === '' ? 1 : toInt(raw);
-                if (bid === null || bid < 1) return { ok: false, message: 'Offerta non valida.' };
-                if (bid > current.max) return { ok: false, message: 'STOP: sei oltre il tuo massimo.' };
-                return { ok: true, bid, message: `Ok, puoi offrire ${bid}.` };
+            function calculateBid() {
+                if (!current) return;
+                const out = $('outAuction');
+                const advice = engine.bidAdvice(current, $('currentOffer').value);
+
+                if (advice.status === 'invalid') {
+                    say(out, '❌ Offerta non valida.', 'error');
+                    return;
+                }
+                if (advice.status === 'stop') {
+                    suggested = null;
+                    $('finalPrice').value = '';
+                    say(out, `⛔ STOP: hai raggiunto il tuo tetto di ${advice.max}. Se lo prende un altro, premi "Andato ad altri".`, 'warn');
+                    return;
+                }
+                suggested = advice.bid;
+                $('finalPrice').value = String(advice.bid);
+                say(out, `💰 Rilancia a ${advice.bid} (il tuo tetto è ${advice.max}).`, 'ok');
             }
 
-            $('btnNextCall').addEventListener('click', () => {
-                const p = engine.nextByMax();
-                if (!p) { say($('outCheck'), '❌ Pool vuoto.', 'error'); closeAuction(); return; }
-                say($('outCheck'), `➡️ Prossimo: ${p.name}`, 'ok');
-                openAuction(p);
-            });
-
-            $('btnSuggest').addEventListener('click', () => {
-                const res = checkOwnBid();
-                say($('outAuction'), res.ok ? `💰 ${res.message}` : `⛔ ${res.message}`, res.ok ? 'ok' : 'warn');
-            });
-
-            $('currentOffer').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); $('btnSuggest').click(); }
-            });
-
-            $('btnWon').addEventListener('click', () => {
+            function confirmWin() {
                 if (!current) return;
-                const check = checkOwnBid();
-                if (!check.ok) { say($('outAuction'), `⛔ ${check.message}`, 'warn'); return; }
+                const out = $('outAuction');
+                const raw = $('finalPrice').value;
+                const price = raw === '' ? suggested : text.toInt(raw);
 
-                const res = engine.win(current.name, check.bid);
-                if (!res.ok) { say($('outAuction'), `❌ ${res.message}`, 'error'); return; }
+                if (price === null || price === undefined) {
+                    say(out, '❌ Inserisci il prezzo finale pagato (o premi prima "Calcola la mia offerta").', 'error');
+                    return;
+                }
 
-                const parts = [`🎉 Vinto ${res.player.name} a ${res.price}.`];
-                if (res.redistribution.changes.length) parts.push('Crediti risparmiati redistribuiti sui prossimi.');
-                say($('outBuy'), parts.join(' '), 'ok');
+                const name = current.name;
+                const res = engine.win(name, price);
+                if (!res.ok) {
+                    say(out, `❌ ${res.message}`, 'error');
+                    return;
+                }
+
+                const parts = [`🎉 Preso ${res.player.name} per ${res.price}.`];
+                if (res.over) parts.push(`Sopra il tuo tetto di ${res.player.max}.`);
+                if (res.redistribution.changes.length) parts.push(credits.describe(res.redistribution) + '.');
+                if (res.unabsorbed) parts.push(`${Math.abs(res.unabsorbed)} crediti non assegnati: lista troppo corta.`);
+
+                say($('outBuy'), parts.join(' '), res.over ? 'warn' : 'ok');
                 closeAuction();
                 render();
-            });
+                flashLastPurchase();
+            }
 
-            $('btnLost').addEventListener('click', () => {
+            function confirmLoss() {
                 if (!current) return;
                 const res = engine.lose(current.name);
-                if (!res.ok) { say($('outAuction'), `❌ ${res.message}`, 'error'); return; }
-                const parts = [`😞 Perso ${res.player.name}, tolto dal pool.`];
-                if (res.redistribution.changes.length) parts.push('Crediti redistribuiti sui tre più cari rimasti.');
+                if (!res.ok) {
+                    say($('outAuction'), `❌ ${res.message}`, 'error');
+                    return;
+                }
+                const parts = [`😞 ${res.player.name} è andato ad altri, tolto dalla lista.`];
+                if (res.redistribution.changes.length) parts.push(credits.describe(res.redistribution) + '.');
                 say($('outBuy'), parts.join(' '), 'warn');
                 closeAuction();
                 render();
+            }
+
+            function flashLastPurchase() {
+                const li = $('purchasesList').lastElementChild;
+                if (!li || li.classList.contains('empty')) return;
+                li.classList.add('flash-add');
+                li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                setTimeout(() => li.classList.remove('flash-add'), 1600);
+            }
+
+            // --- eventi -------------------------------------------------------------
+
+            function search() {
+                const out = $('outCheck');
+                const q = $('q').value;
+                const matches = engine.candidates(q);
+
+                if (!matches.length) {
+                    closeAuction();
+                    const already = engine.bought(q);
+                    say(out, already
+                        ? `ℹ️ "${already.name}" l'hai già preso per ${already.price}.`
+                        : `❌ "${q}" non è (più) nella tua lista.`, already ? 'warn' : 'error');
+                    return;
+                }
+                if (matches.length > 1) {
+                    closeAuction();
+                    say(out, `⚠️ Più match, sii più preciso:\n- ${matches.map(m => m.name).join('\n- ')}`, 'warn');
+                    return;
+                }
+                say(out, `✅ Trovato: ${describePlayer(matches[0])}`, 'ok');
+                openAuction(matches[0]);
+            }
+
+            $('btnCheck').addEventListener('click', search);
+            $('q').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); search(); }
             });
 
-            // --- offerte degli altri ------------------------------------------------
-
-            $('btnAddOffer').addEventListener('click', () => {
-                const name = ($('offerName').value || '').trim();
-                const raw = ($('offerCurrent').value || '').trim();
-                const cur = raw === '' ? 0 : toInt(raw);
-
-                if (!name) { say($('outOffers'), '❌ Inserisci un nome.', 'error'); return; }
-                if (cur === null || cur < 0) { say($('outOffers'), '❌ Offerta attuale non valida.', 'error'); return; }
-
-                const advice = engine.bidAdvice(name, cur);
-                offers().push({ name, currentOffer: cur, suggestion: advice.bid, status: advice.status, at: Date.now() });
-                if (offers().length > 50) engine.extra.offers = offers().slice(-50);
-                engine.persist();
-                renderOffers();
-
-                const messages = {
-                    bid: [`✅ Rilancia a ${advice.bid}.`, 'ok'],
-                    stop: ['⛔ STOP: raggiunto il tuo massimo.', 'warn'],
-                    unknown: ['🚫 Non ci interessa: non è nella tua lista.', 'warn'],
-                    'already-bought': ['ℹ️ Già acquistato.', 'warn'],
-                    invalid: ['❌ Offerta non valida.', 'error'],
-                };
-                const [msg, tone] = messages[advice.status] || ['❓ Non so cosa dirti.', 'warn'];
-                say($('outOffers'), msg, tone);
+            $('btnClear').addEventListener('click', () => {
+                $('q').value = '';
+                say($('outCheck'), '');
+                closeAuction();
+                $('q').focus();
             });
 
-            $('btnClearOffers').addEventListener('click', () => {
-                engine.extra.offers = [];
-                engine.persist();
-                renderOffers();
-                say($('outOffers'), '🧹 Storico offerte svuotato.', 'ok');
+            $('btnRandom').addEventListener('click', () => {
+                const p = engine.randomPlayer();
+                if (!p) { say($('outRandom'), '❌ Lista vuota: non è rimasto nessuno.', 'error'); return; }
+                say($('outRandom'), `🎯 Estratto: ${describePlayer(p)}`, 'ok');
+                openAuction(p, 1);
             });
 
-            // --- resto --------------------------------------------------------------
+            $('btnNext').addEventListener('click', () => {
+                const p = engine.nextByMax();
+                if (!p) { say($('outRandom'), '❌ Lista vuota: non è rimasto nessuno.', 'error'); return; }
+                say($('outRandom'), `➡️ Il più caro rimasto: ${describePlayer(p)}`, 'ok');
+                openAuction(p, 1);
+            });
 
-            $('btnResetAll').addEventListener('click', () => {
-                if (!confirm('Reset: ripristina il pool di partenza e azzera gli acquisti. Procedo?')) return;
+            $('btnCalculateBid').addEventListener('click', calculateBid);
+            $('currentOffer').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); calculateBid(); }
+            });
+
+            $('btnPlayerWon').addEventListener('click', confirmWin);
+            $('btnPlayerLost').addEventListener('click', confirmLoss);
+            $('btnCancelAuction').addEventListener('click', closeAuction);
+
+            $('btnShowLeft').addEventListener('click', () => {
+                const wrap = $('leftWrap');
+                wrap.hidden = !wrap.hidden;
+                if (!wrap.hidden) { wrap.open = true; renderRemaining(); }
+            });
+
+            $('btnReset').addEventListener('click', () => {
+                if (!confirm('Reset totale: ripristina la lista di partenza e cancella tutti gli acquisti. Procedo?')) return;
                 engine.reset();
                 closeAuction();
-                say($('outCheck'), '✅ Reset completato.', 'ok');
                 say($('outBuy'), '');
-                say($('outOffers'), '');
+                say($('outCheck'), '');
+                say($('outRandom'), '');
+                say($('outSettings'), '✅ Reset completato.', 'ok');
                 render();
             });
 
@@ -1569,14 +1698,14 @@
                 if (!res.ok) { say($('outBuy'), `⚠️ ${res.message}`, 'warn'); return; }
                 const label = res.action.type === 'win'
                     ? `acquisto di ${res.action.player.name} per ${res.action.price}`
-                    : `"perso" di ${res.action.player.name}`;
-                say($('outBuy'), `↩️ Annullato: ${label}. Rimesso nel pool.`, 'ok');
+                    : `"andato ad altri" di ${res.action.player.name}`;
+                say($('outBuy'), `↩️ Annullato: ${label}. Rimesso in lista con tetto ${res.action.player.max}.`, 'ok');
                 closeAuction();
                 render();
             });
 
             $('btnExportCSV').addEventListener('click', () => {
-                const res = engine.exportCSV('mercato_riparazione');
+                const res = engine.exportCSV('acquisti_fantacalcio');
                 say($('outBuy'), res.ok ? '📦 CSV esportato.' : `⚠️ ${res.message}`, res.ok ? 'ok' : 'warn');
             });
 
@@ -1593,7 +1722,7 @@
             render();
 
             if (restored && (engine.purchases.length || engine.actions.length)) {
-                say($('outBuy'), `↺ Ripreso il lavoro salvato: ${engine.purchases.length} acquisti, ${engine.spent} crediti spesi.`, 'ok');
+                say($('outBuy'), `↺ Ripreso il lavoro salvato: ${engine.purchases.length} acquisti, ${engine.spent} crediti spesi. Usa "Reset totale" per ricominciare.`, 'ok');
             } else if (!engine.storageAvailable) {
                 say($('outSettings'), '⚠️ Il browser non permette di salvare: se ricarichi la pagina perdi tutto.', 'warn');
             }
