@@ -68,23 +68,54 @@ Il flusso è: scegli chi chiamare → segui i rilanci → registri l'esito.
 - **Chiama il più caro**: ti dà il giocatore col tetto più alto ancora libero.
 - **Cerca per nome**: match parziale, accenti e maiuscole ignorati (`vlahovic` trova `Vlahović`).
   Ruolo e squadra vengono mostrati accanto al nome, per non confondere gli omonimi.
-- **Calcola la mia offerta**: scrivi l'offerta che c'è sul tavolo, ti dice a quanto rilanciare
-  o ti dice STOP se sei arrivato al tuo tetto.
+- **Calcola la mia offerta**: scrivi l'offerta che c'è sul tavolo, ti dice a quanto
+  rilanciare, se stai sforando il tuo piano, o se non hai più i crediti
+  (vedi "Sforare il tetto di un giocatore").
 - **Preso io** / **Andato ad altri**: registrano l'esito e ridistribuiscono i crediti.
 - **Annulla ultima azione**: torna indietro di un passo, ridistribuzione compresa.
-- **Esporta CSV**, **Reset totale**, budget modificabile a mano.
+- **Esporta CSV**, **Reset totale**, budget e dimensione della rosa modificabili
+  dalla pagina.
 
 ### `market-auction.html` — mercato di riparazione
 
 Pool unico senza ruoli, pensato per quando **qualcuno ti guarda lo schermo**: i tuoi
 massimali non vengono mai stampati a video né esportati nel CSV. L'app dice solo
-"rilancia a X" oppure "STOP".
+"rilancia a X", "sei oltre il tuo massimo" o "STOP", mai il numero.
 
 - **Prossimo**: chiama il giocatore col massimale più alto rimasto.
 - **Offerte degli altri**: scrivi nome e offerta corrente, ti dice se rilanciare,
   se fermarti, se non ti interessa o se l'hai già preso.
+- Anche qui il massimale si può sforare, ma i messaggi non lo nominano mai:
+  dicono solo "sei oltre il tuo massimo", senza il numero.
 
 > Nota: nasconde i massimali *a schermo*, non nel file. Chiunque apra il sorgente li legge.
+
+## Sforare il tetto di un giocatore
+
+Il `max` che metti nella lista è un **piano, non un vincolo**: dal vivo capita di
+volere un giocatore più di quanto avevi previsto, e l'app te lo lascia fare.
+
+Il limite vero è un altro, ed è la pillola **"Max spendibile"** in alto:
+
+```
+max spendibile = crediti residui − 1 per ogni slot di rosa che resterà vuoto
+```
+
+Se devi comprare 25 giocatori e non ne hai ancora presi, sul primo puoi arrivare a
+`500 − 24 = 476`: gli altri 24 crediti servono a non ritrovarti con la rosa incompleta
+e zero crediti. Il numero si aggiorna a ogni acquisto.
+
+Quanti giocatori devi comprare lo imposti nel riquadro "Lista e impostazioni"
+(default: la lunghezza della lista). **Mettilo a 0** se non vuoi nessuna riserva:
+il limite diventa semplicemente il residuo.
+
+In asta il pulsante *Calcola la mia offerta* distingue tre casi:
+
+| | Cosa vuol dire |
+|---|---|
+| 💰 **Rilancia a N** | dentro il tuo piano |
+| ⚠️ **Sopra il tuo tetto** | puoi permettertelo, ma quei crediti li togli agli altri |
+| ⛔ **STOP** | non ci sono i crediti: qui ci si ferma davvero |
 
 ## Come funziona la ridistribuzione dei crediti
 
@@ -96,12 +127,16 @@ somma dei tetti rimasti + crediti spesi = budget
 
 - Prendi un giocatore **sotto** il tuo tetto → la differenza va agli altri.
 - Il giocatore va a un avversario → tutto il suo tetto va agli altri.
-- Paghi **sopra** il tuo tetto → lo sforamento viene tolto dai tetti degli altri.
+- Paghi **sopra** il tuo tetto → lo sforamento viene **tolto** dai tetti degli altri,
+  senza mai scendere sotto 1 credito a testa. Se paghi 100 un giocatore che avevi
+  valutato 1, i 99 in più li perdono gli altri: la lista si riallinea da sola a quello
+  che puoi ancora spendere davvero.
 
 Nell'asta principale i crediti si distribuiscono uno alla volta a rotazione, dal più
 caro in giù. Nella riparazione si dividono in parti uguali fra i tre più cari.
-Se l'invariante si rompe (lista esaurita, o lista di partenza che non quadra) la pagina
-lo scrive in un banner invece di lasciarti scoprire il buco a fine asta.
+Se l'invariante si rompe (lista esaurita, sforamento non più recuperabile, o lista di
+partenza che non quadra) la pagina lo scrive in un banner invece di lasciarti scoprire
+il buco a fine asta.
 
 ## Sviluppo
 
@@ -153,6 +188,8 @@ Niente ESM lato pagina, perché i moduli ES non si caricano da `file://`.
 
 **Aggiunto**
 
+- **Sforamento controllato**: si può pagare più del tetto pianificato, entro un limite
+  che tiene conto dei crediti rimasti e degli slot di rosa ancora da riempire.
 - **Campo squadra** nelle liste, mostrato accanto al nome in asta e nell'export CSV.
 - **Import da CSV** (`npm run import`), così la lista si aggiorna da un foglio di calcolo
   senza scrivere JavaScript a mano.

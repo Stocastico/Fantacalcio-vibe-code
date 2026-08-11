@@ -9,6 +9,10 @@
  *  - `max`  è il tuo tetto di spesa, non il prezzo di listino
  *  - `role` (P/D/C/A) è opzionale: il mercato di riparazione ha un pool unico
  *  - `team` è opzionale, serve solo a distinguere gli omonimi a colpo d'occhio
+ *
+ * Il `max` è un piano, non un vincolo: in asta lo puoi sforare. Il limite duro è
+ * `maxSpendable()`, cioè i crediti rimasti meno quelli da tenere da parte per
+ * riuscire comunque a riempire la rosa.
  */
 ;(function (global) {
     'use strict';
@@ -73,6 +77,9 @@
      *   storageBackend    override per i test
      *   easterEgg         attiva la regola del 36 nel calcolo del rilancio
      *   hideMaxInCsv      omette la colonna dei massimali nell'export
+     *   rosterSize        quanti giocatori devi avere a fine asta; serve a tenere
+     *                     da parte 1 credito per ogni slot ancora vuoto. 0 = nessuna
+     *                     riserva, il limite è solo il residuo.
      */
     function createEngine(config) {
         const cfg = Object.assign({
@@ -84,6 +91,7 @@
             storageBackend: undefined,
             easterEgg: false,
             hideMaxInCsv: false,
+            rosterSize: 0,
         }, config);
 
         const initial = normalizePlayers(cfg.players).players;
@@ -92,6 +100,7 @@
             : null;
 
         let budget = toInt(cfg.budget) ?? 500;
+        let rosterSize = Math.max(0, toInt(cfg.rosterSize) ?? 0);
         let pool = clone(initial);
         let purchases = [];
         let spent = 0;
@@ -109,13 +118,14 @@
 
         function persist() {
             if (!store) return false;
-            return store.save({ budget, pool, purchases, spent, actions, extra });
+            return store.save({ budget, rosterSize, pool, purchases, spent, actions, extra });
         }
 
         // --- lettura stato -------------------------------------------------
 
         const view = {
             get budget() { return budget; },
+            get rosterSize() { return rosterSize; },
             get pool() { return pool; },
             get purchases() { return purchases; },
             get spent() { return spent; },
@@ -134,6 +144,22 @@
              * per tutta l'asta: è il controllo che i crediti non si perdano.
              */
             allocated() { return view.sumMax() + spent; },
+
+            /** Slot di rosa ancora da riempire. Zero se non hai fissato una rosa. */
+            slotsLeft() { return rosterSize ? Math.max(0, rosterSize - purchases.length) : 0; },
+
+            /**
+             * Crediti da tenere da parte per riuscire comunque a riempire la rosa:
+             * almeno 1 a testa per ogni slot che resterà vuoto dopo questo acquisto.
+             */
+            reserve() { return Math.max(0, view.slotsLeft() - 1); },
+
+            /**
+             * Il massimo che puoi davvero pagare adesso per un giocatore.
+             * È questo il limite vero: il `max` della lista è solo il tuo piano,
+             * e in asta lo puoi sforare finché i crediti reggono.
+             */
+            maxSpendable() { return Math.max(0, view.left() - view.reserve()); },
 
             countsByRole() {
                 const c = { P: 0, D: 0, C: 0, A: 0 };
@@ -166,29 +192,45 @@
 
         /**
          * Dato quanto sta offrendo un altro, dice se rilanciare e a quanto.
-         * @returns {{status:'bid'|'stop'|'invalid'|'unknown'|'already-bought', bid:number|null, max:number|null}}
+         *
+         * Ci sono due soglie diverse e non vanno confuse:
+         *  - `max` del giocatore è il tuo piano, sforabile;
+         *  - `maxSpendable()` è il limite vero, che dipende dai crediti rimasti
+         *    e da quanti giocatori devi ancora comprare.
+         *
+         * @returns {{status:'bid'|'over'|'stop'|'invalid'|'unknown'|'already-bought',
+         *            bid:number|null, max:number|null, cap:number, overBy:number}}
+         *   'over' = puoi permettertelo ma stai sforando il piano
+         *   'stop' = non puoi permettertelo, punto
          */
         function bidAdvice(nameOrPlayer, currentOffer) {
             const player = typeof nameOrPlayer === 'string' ? view.find(nameOrPlayer) : nameOrPlayer;
+            const cap = view.maxSpendable();
+            const base = { bid: null, max: null, cap, overBy: 0 };
 
             if (typeof nameOrPlayer === 'string' && view.bought(nameOrPlayer)) {
-                return { status: 'already-bought', bid: null, max: null };
+                return Object.assign(base, { status: 'already-bought' });
             }
-            if (!player) return { status: 'unknown', bid: null, max: null };
+            if (!player) return Object.assign(base, { status: 'unknown' });
+
+            base.max = player.max;
 
             const cur = currentOffer === '' || currentOffer === null || currentOffer === undefined
                 ? 0
                 : toInt(currentOffer);
-            if (cur === null || cur < 0) return { status: 'invalid', bid: null, max: player.max };
+            if (cur === null || cur < 0) return Object.assign(base, { status: 'invalid' });
 
             let next = cur <= 0 ? 1 : cur + 1;
-            if (next > player.max) return { status: 'stop', bid: null, max: player.max };
 
             // Regola del 36: se il tetto è alto e siamo ancora bassi, si salta
             // direttamente a 36 per scoraggiare i rilanci a un credito per volta.
             if (cfg.easterEgg && player.max > 37 && cur < 35) next = 36;
 
-            return { status: 'bid', bid: next, max: player.max };
+            if (next > cap) return Object.assign(base, { status: 'stop' });
+            if (next > player.max) {
+                return Object.assign(base, { status: 'over', bid: next, overBy: next - player.max });
+            }
+            return Object.assign(base, { status: 'bid', bid: next });
         }
 
         // --- azioni --------------------------------------------------------
@@ -201,8 +243,14 @@
             const price = toInt(priceRaw);
             if (price === null || price < 0) return fail('Prezzo non valido.');
             if (view.bought(name)) return fail(`"${player.name}" risulta già acquistato.`);
-            if (spent + price > budget) {
-                return fail(`Budget insufficiente: residuo ${view.left()}, prezzo ${price}.`);
+
+            // Il tetto della lista si può sforare; questo no.
+            const cap = view.maxSpendable();
+            if (price > cap) {
+                const reserve = view.reserve();
+                return fail(reserve > 0
+                    ? `Puoi spendere al massimo ${cap}: ti restano ${view.left()} crediti e devi tenerne ${reserve} per gli altri ${reserve} giocatori da comprare.`
+                    : `Puoi spendere al massimo ${cap}: è tutto quello che ti resta.`);
             }
 
             const taken = snapshot(player);
@@ -313,6 +361,18 @@
             return { ok: true, budget };
         }
 
+        /** Quanti giocatori devi avere a fine asta. 0 = nessuna riserva per gli slot. */
+        function setRosterSize(value) {
+            const n = toInt(value);
+            if (n === null || n < 0) return fail('Numero di giocatori non valido.');
+            if (n && n < purchases.length) {
+                return fail(`Ne hai già comprati ${purchases.length}: la rosa non può essere più piccola.`);
+            }
+            rosterSize = n;
+            persist();
+            return { ok: true, rosterSize };
+        }
+
         // --- persistenza ---------------------------------------------------
 
         /** Ricarica lo stato salvato. Se manca o è incoerente, non tocca niente. */
@@ -328,6 +388,7 @@
                 : [];
 
             budget = toInt(s.budget) ?? budget;
+            rosterSize = Math.max(0, toInt(s.rosterSize) ?? rosterSize);
             pool = restoredPool;
             purchases = restoredPurchases;
             spent = restoredPurchases.reduce((a, p) => a + p.price, 0);
@@ -387,6 +448,7 @@
             reset,
             loadPlayers,
             setBudget,
+            setRosterSize,
             restore,
             persist,
             clearSaved,

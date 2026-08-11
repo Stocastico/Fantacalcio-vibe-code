@@ -27,6 +27,7 @@
         <span class="pill" id="sumNow">Somma tetti: 0</span>
         <span class="pill" id="budgetLeft">Crediti residui: 0</span>
         <span class="pill" id="playersLeft">Giocatori rimanenti: 0</span>
+        <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso per un giocatore, tenendo da parte 1 credito per ogni slot di rosa ancora vuoto">Max spendibile: 0</span>
     </div>
 
     <div class="layout" style="margin-top:16px;">
@@ -89,12 +90,21 @@
                 </details>
 
                 <div class="row" style="margin-top:20px;">
-                    <div style="flex:1; min-width:200px;">
+                    <div style="flex:1; min-width:180px;">
                         <label for="budgetInput">Budget totale</label>
                         <input id="budgetInput" type="number" inputmode="numeric" min="0" step="1" />
                     </div>
+                    <div style="flex:1; min-width:180px;">
+                        <label for="rosterInput">Giocatori da comprare</label>
+                        <input id="rosterInput" type="number" inputmode="numeric" min="0" step="1" />
+                    </div>
                     <button id="btnSetBudget" class="secondary" style="align-self:flex-end;">Applica</button>
                 </div>
+                <p class="muted">
+                    "Giocatori da comprare" è quanti ne devi avere a fine asta. Serve a tenere
+                    da parte 1 credito per ogni slot ancora vuoto, così non resti senza crediti
+                    a rosa incompleta. Mettilo a 0 per togliere la riserva.
+                </p>
                 <div id="outSettings" class="out" aria-live="polite"></div>
             </section>
         </div>

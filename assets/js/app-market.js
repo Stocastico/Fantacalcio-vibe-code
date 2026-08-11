@@ -82,7 +82,8 @@
         list.textContent = '';
         const labels = {
             bid: (o) => `rilancia a ${o.suggestion}`,
-            stop: () => 'STOP, massimo raggiunto',
+            over: (o) => `rilancia a ${o.suggestion}, ma sfori`,
+            stop: () => 'STOP, crediti finiti',
             unknown: () => 'non ci interessa',
             'already-bought': () => 'già preso',
             invalid: () => 'offerta non valida',
@@ -94,6 +95,7 @@
             const verdict = document.createElement('strong');
             verdict.textContent = (labels[o.status] || (() => o.status))(o);
             if (o.status !== 'bid') verdict.classList.add('over');
+            li.title = o.status === 'over' ? 'Sostenibile, ma fuori dal piano' : '';
             li.append(label, verdict);
             list.appendChild(li);
         }
@@ -117,16 +119,24 @@
     }
 
     /**
-     * Qui il campo è "la mia offerta", non l'offerta degli altri: si controlla
-     * solo che il valore stia dentro il massimale, senza mostrarlo.
+     * Qui il campo è "la mia offerta", non l'offerta degli altri.
+     *
+     * Il massimale si può sforare, ma i crediti no. I messaggi non contengono
+     * mai il massimale: dicono solo se sei dentro o fuori dal piano.
      */
     function checkOwnBid() {
         if (!current) return { ok: false, message: 'Nessun giocatore in asta.' };
         const raw = ($('currentOffer').value || '').trim();
         const bid = raw === '' ? 1 : toInt(raw);
         if (bid === null || bid < 1) return { ok: false, message: 'Offerta non valida.' };
-        if (bid > current.max) return { ok: false, message: 'STOP: sei oltre il tuo massimo.' };
-        return { ok: true, bid, message: `Ok, puoi offrire ${bid}.` };
+
+        if (bid > engine.maxSpendable()) {
+            return { ok: false, message: `Non arrivi a ${bid}: ti restano ${engine.left()} crediti.` };
+        }
+        if (bid > current.max) {
+            return { ok: true, bid, over: true, message: `${bid} è oltre il tuo massimo, ma te lo puoi permettere.` };
+        }
+        return { ok: true, bid, over: false, message: `Ok, puoi offrire ${bid}.` };
     }
 
     $('btnNextCall').addEventListener('click', () => {
@@ -138,7 +148,8 @@
 
     $('btnSuggest').addEventListener('click', () => {
         const res = checkOwnBid();
-        say($('outAuction'), res.ok ? `💰 ${res.message}` : `⛔ ${res.message}`, res.ok ? 'ok' : 'warn');
+        if (!res.ok) { say($('outAuction'), `⛔ ${res.message}`, 'warn'); return; }
+        say($('outAuction'), res.over ? `⚠️ ${res.message}` : `💰 ${res.message}`, res.over ? 'warn' : 'ok');
     });
 
     $('currentOffer').addEventListener('keydown', (e) => {
@@ -154,8 +165,9 @@
         if (!res.ok) { say($('outAuction'), `❌ ${res.message}`, 'error'); return; }
 
         const parts = [`🎉 Vinto ${res.player.name} a ${res.price}.`];
-        if (res.redistribution.changes.length) parts.push('Crediti risparmiati redistribuiti sui prossimi.');
-        say($('outBuy'), parts.join(' '), 'ok');
+        if (res.over) parts.push('Sopra il tuo massimo: i crediti vengono recuperati dagli altri.');
+        else if (res.redistribution.changes.length) parts.push('Crediti risparmiati redistribuiti sui prossimi.');
+        say($('outBuy'), parts.join(' '), res.over ? 'warn' : 'ok');
         closeAuction();
         render();
     });
@@ -187,9 +199,11 @@
         engine.persist();
         renderOffers();
 
+        // Nessun messaggio cita il massimale: `advice.overBy` lo rivelerebbe.
         const messages = {
             bid: [`✅ Rilancia a ${advice.bid}.`, 'ok'],
-            stop: ['⛔ STOP: raggiunto il tuo massimo.', 'warn'],
+            over: [`⚠️ Rilancia a ${advice.bid} solo se lo vuoi davvero: sei oltre il tuo massimo.`, 'warn'],
+            stop: [`⛔ STOP: non ti bastano i crediti (${engine.left()} rimasti).`, 'warn'],
             unknown: ['🚫 Non ci interessa: non è nella tua lista.', 'warn'],
             'already-bought': ['ℹ️ Già acquistato.', 'warn'],
             invalid: ['❌ Offerta non valida.', 'error'],

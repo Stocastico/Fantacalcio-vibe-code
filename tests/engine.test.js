@@ -131,7 +131,8 @@ test('win rifiuta chi non è in lista, i doppioni e chi sfora il budget', () => 
     assert.ok(e.win('Portiere', 10).ok);
     assert.match(e.win('Portiere', 10).message, /non è nella lista/, 'ormai è fuori dalla lista');
 
-    assert.match(e.win('Attaccante', 200).message, /Budget insufficiente/);
+    // Il tetto del giocatore si può sforare, i crediti no.
+    assert.match(e.win('Attaccante', 200).message, /al massimo 90/);
 });
 
 test('il nome viene riconosciuto anche con accenti e maiuscole diverse', () => {
@@ -197,12 +198,18 @@ test('undo senza azioni da annullare non rompe niente', () => {
 
 const pick = ({ status, bid }) => ({ status, bid });
 
-test('bidAdvice rilancia di uno e si ferma al tetto', () => {
+test('bidAdvice rilancia di uno e segnala quando si esce dal piano', () => {
     const e = nuovo();
     assert.deepEqual(pick(e.bidAdvice('Attaccante', 10)), { status: 'bid', bid: 11 });
     assert.deepEqual(pick(e.bidAdvice('Attaccante', '')), { status: 'bid', bid: 1 });
     assert.deepEqual(pick(e.bidAdvice('Attaccante', 39)), { status: 'bid', bid: 40 });
-    assert.deepEqual(pick(e.bidAdvice('Attaccante', 40)), { status: 'stop', bid: null });
+
+    // Oltre il tetto pianificato, ma i crediti ci sono: si può fare.
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 40)), { status: 'over', bid: 41 });
+
+    // Oltre i crediti disponibili: qui ci si ferma davvero.
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 100)), { status: 'stop', bid: null });
+
     assert.deepEqual(pick(e.bidAdvice('Attaccante', -1)), { status: 'invalid', bid: null });
     assert.deepEqual(pick(e.bidAdvice('Fantasma', 5)), { status: 'unknown', bid: null });
 });
