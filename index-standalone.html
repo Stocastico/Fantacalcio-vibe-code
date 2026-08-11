@@ -503,7 +503,8 @@
         <span class="pill" id="countA">A: 0</span>
         <span class="pill" id="sumNow">Somma tetti: 0</span>
         <span class="pill" id="budgetLeft">Crediti residui: 0</span>
-        <span class="pill" id="playersLeft">Giocatori rimanenti: 0</span>
+        <span class="pill" id="playersLeft">In lista: 0</span>
+        <span class="pill" id="slotsLeft" title="Slot di rosa ancora da riempire: scendono solo quando compri, non quando un giocatore va a un altro">Da comprare: 0</span>
         <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso per un giocatore, tenendo da parte 1 credito per ogni slot di rosa ancora vuoto">Max spendibile: 0</span>
     </div>
 
@@ -572,15 +573,17 @@
                         <input id="budgetInput" type="number" inputmode="numeric" min="0" step="1" />
                     </div>
                     <div style="flex:1; min-width:180px;">
-                        <label for="rosterInput">Giocatori da comprare</label>
+                        <label for="rosterInput">Rosa completa (giocatori totali)</label>
                         <input id="rosterInput" type="number" inputmode="numeric" min="0" step="1" />
                     </div>
                     <button id="btnSetBudget" class="secondary" style="align-self:flex-end;">Applica</button>
                 </div>
                 <p class="muted">
-                    "Giocatori da comprare" è quanti ne devi avere a fine asta. Serve a tenere
-                    da parte 1 credito per ogni slot ancora vuoto, così non resti senza crediti
-                    a rosa incompleta. Mettilo a 0 per togliere la riserva.
+                    Quanti giocatori devi avere a fine asta: è un totale fisso. Quelli che ti
+                    mancano ancora li vedi nella pillola "Da comprare" in alto, che scende a
+                    ogni acquisto. Serve a tenere da parte 1 credito per ogni slot ancora
+                    vuoto, così non resti senza crediti a rosa incompleta.
+                    Mettilo a 0 per togliere la riserva.
                 </p>
                 <div id="outSettings" class="out" aria-live="polite"></div>
             </section>
@@ -1550,7 +1553,10 @@
                 $('countA').textContent = `A: ${c.A}`;
                 $('sumNow').textContent = `Somma tetti: ${engine.sumMax()}`;
                 $('budgetLeft').textContent = `Crediti residui: ${engine.left()}`;
-                $('playersLeft').textContent = `Giocatori rimanenti: ${engine.pool.length}`;
+                $('playersLeft').textContent = `In lista: ${engine.pool.length}`;
+                $('slotsLeft').textContent = engine.rosterSize
+                    ? `Da comprare: ${engine.slotsLeft()}`
+                    : 'Da comprare: —';
                 $('spentPill').textContent = `Speso: ${engine.spent}`;
                 $('leftPill').textContent = `Residuo: ${engine.left()}`;
                 $('budgetInput').value = String(engine.budget);
@@ -1573,7 +1579,7 @@
                 pill.textContent = `Max spendibile: ${cap}`;
                 pill.classList.toggle('pill-danger', slots > 0 && cap < 1);
                 pill.title = slots > 0
-                    ? `Ti restano ${engine.left()} crediti e ${slots} giocatori da comprare: ne tieni da parte ${engine.reserve()} per gli altri.`
+                    ? `Ti restano ${engine.left()} crediti e ${slots} giocatori da comprare: ${engine.reserve()} li tieni da parte per gli slot successivi.`
                     : `Nessuna riserva impostata: puoi arrivare fino al residuo di ${engine.left()}.`;
             }
 
@@ -1845,7 +1851,7 @@
                     return;
                 }
                 const rosa = engine.rosterSize
-                    ? `rosa da ${engine.rosterSize} giocatori, puoi spendere fino a ${engine.maxSpendable()} sul prossimo`
+                    ? `rosa da ${engine.rosterSize} (te ne mancano ${engine.slotsLeft()}), puoi spendere fino a ${engine.maxSpendable()} sul prossimo`
                     : 'nessuna riserva per la rosa';
                 say($('outSettings'), `✅ Budget ${engine.budget}, ${rosa}.`, 'ok');
             });

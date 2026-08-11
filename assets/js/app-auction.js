@@ -55,7 +55,10 @@
         $('countA').textContent = `A: ${c.A}`;
         $('sumNow').textContent = `Somma tetti: ${engine.sumMax()}`;
         $('budgetLeft').textContent = `Crediti residui: ${engine.left()}`;
-        $('playersLeft').textContent = `Giocatori rimanenti: ${engine.pool.length}`;
+        $('playersLeft').textContent = `In lista: ${engine.pool.length}`;
+        $('slotsLeft').textContent = engine.rosterSize
+            ? `Da comprare: ${engine.slotsLeft()}`
+            : 'Da comprare: —';
         $('spentPill').textContent = `Speso: ${engine.spent}`;
         $('leftPill').textContent = `Residuo: ${engine.left()}`;
         $('budgetInput').value = String(engine.budget);
@@ -78,7 +81,7 @@
         pill.textContent = `Max spendibile: ${cap}`;
         pill.classList.toggle('pill-danger', slots > 0 && cap < 1);
         pill.title = slots > 0
-            ? `Ti restano ${engine.left()} crediti e ${slots} giocatori da comprare: ne tieni da parte ${engine.reserve()} per gli altri.`
+            ? `Ti restano ${engine.left()} crediti e ${slots} giocatori da comprare: ${engine.reserve()} li tieni da parte per gli slot successivi.`
             : `Nessuna riserva impostata: puoi arrivare fino al residuo di ${engine.left()}.`;
     }
 
@@ -350,7 +353,7 @@
             return;
         }
         const rosa = engine.rosterSize
-            ? `rosa da ${engine.rosterSize} giocatori, puoi spendere fino a ${engine.maxSpendable()} sul prossimo`
+            ? `rosa da ${engine.rosterSize} (te ne mancano ${engine.slotsLeft()}), puoi spendere fino a ${engine.maxSpendable()} sul prossimo`
             : 'nessuna riserva per la rosa';
         say($('outSettings'), `✅ Budget ${engine.budget}, ${rosa}.`, 'ok');
     });

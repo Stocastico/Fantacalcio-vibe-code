@@ -105,9 +105,19 @@ Se devi comprare 25 giocatori e non ne hai ancora presi, sul primo puoi arrivare
 `500 − 24 = 476`: gli altri 24 crediti servono a non ritrovarti con la rosa incompleta
 e zero crediti. Il numero si aggiorna a ogni acquisto.
 
-Quanti giocatori devi comprare lo imposti nel riquadro "Lista e impostazioni"
-(default: la lunghezza della lista). **Mettilo a 0** se non vuoi nessuna riserva:
-il limite diventa semplicemente il residuo.
+Il totale della rosa lo imposti nel riquadro "Lista e impostazioni" (default: la
+lunghezza della lista). **Mettilo a 0** se non vuoi nessuna riserva: il limite diventa
+semplicemente il residuo.
+
+Attenzione a non confondere due pillole che sembrano simili:
+
+| Pillola | Cos'è |
+|---|---|
+| **In lista** | quanti giocatori restano nella tua wishlist |
+| **Da comprare** | quanti slot di rosa devi ancora riempire |
+
+Scendono in modo diverso: se un giocatore va a un avversario esce dalla lista, ma lo
+slot resta da riempire. "Da comprare" cala **solo quando compri**.
 
 In asta il pulsante *Calcola la mia offerta* distingue tre casi:
 
