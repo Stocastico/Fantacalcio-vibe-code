@@ -5,9 +5,14 @@
  * node senza browser e le due pagine possono avere UI diverse sopra lo stesso
  * comportamento.
  *
- * Modello dati unico: ogni giocatore è { name, max, role? }.
+ * Modello dati unico: ogni giocatore è { name, max, role?, team? }.
  *  - `max`  è il tuo tetto di spesa, non il prezzo di listino
  *  - `role` (P/D/C/A) è opzionale: il mercato di riparazione ha un pool unico
+ *  - `team` è opzionale, serve solo a distinguere gli omonimi a colpo d'occhio
+ *
+ * Il `max` è un piano, non un vincolo: in asta lo puoi sforare. Il limite duro è
+ * `maxSpendable()`, cioè i crediti rimasti meno quelli da tenere da parte per
+ * riuscire comunque a riempire la rosa.
  */
 ;(function (global) {
     'use strict';
@@ -23,9 +28,10 @@
     const VALID_ROLES = ['P', 'D', 'C', 'A'];
 
     /**
-     * Porta una lista qualsiasi nella forma { name, max, role }.
-     * Accetta sia `max` che `bid` (il nome usato nelle stagioni precedenti).
-     * Scarta le righe inutilizzabili e i doppioni, riportando cosa ha scartato.
+     * Porta una lista qualsiasi nella forma { name, max, role, team }.
+     * Accetta sia `max` che `bid` (il nome usato nelle stagioni precedenti) e
+     * sia `team` che `squadra`. Scarta le righe inutilizzabili e i doppioni,
+     * riportando cosa ha scartato.
      */
     function normalizePlayers(list) {
         const players = [];
@@ -48,8 +54,14 @@
             if (seen.has(key)) { problems.push(`${label} (${name}): duplicato, tengo il primo.`); return; }
             seen.add(key);
 
-            const role = String(raw.role ?? '').toUpperCase();
-            players.push({ name, max, role: VALID_ROLES.includes(role) ? role : undefined });
+            const role = String(raw.role ?? raw.ruolo ?? '').toUpperCase();
+            const team = String(raw.team ?? raw.squadra ?? '').trim();
+            players.push({
+                name,
+                max,
+                role: VALID_ROLES.includes(role) ? role : undefined,
+                team: team || undefined,
+            });
         });
 
         return { players, problems };
@@ -65,6 +77,9 @@
      *   storageBackend    override per i test
      *   easterEgg         attiva la regola del 36 nel calcolo del rilancio
      *   hideMaxInCsv      omette la colonna dei massimali nell'export
+     *   rosterSize        quanti giocatori devi avere a fine asta; serve a tenere
+     *                     da parte 1 credito per ogni slot ancora vuoto. 0 = nessuna
+     *                     riserva, il limite è solo il residuo.
      */
     function createEngine(config) {
         const cfg = Object.assign({
@@ -76,6 +91,7 @@
             storageBackend: undefined,
             easterEgg: false,
             hideMaxInCsv: false,
+            rosterSize: 0,
         }, config);
 
         const initial = normalizePlayers(cfg.players).players;
@@ -84,6 +100,7 @@
             : null;
 
         let budget = toInt(cfg.budget) ?? 500;
+        let rosterSize = Math.max(0, toInt(cfg.rosterSize) ?? 0);
         let pool = clone(initial);
         let purchases = [];
         let spent = 0;
@@ -91,18 +108,24 @@
         let extra = {};     // spazio libero per stato specifico della singola pagina
 
         function clone(list) {
-            return list.map(p => ({ name: p.name, max: p.max, role: p.role }));
+            return list.map(p => ({ name: p.name, max: p.max, role: p.role, team: p.team }));
+        }
+
+        /** Copia dei dati identificativi di un giocatore, senza il riferimento all'oggetto nel pool. */
+        function snapshot(p) {
+            return { name: p.name, max: p.max, role: p.role, team: p.team };
         }
 
         function persist() {
             if (!store) return false;
-            return store.save({ budget, pool, purchases, spent, actions, extra });
+            return store.save({ budget, rosterSize, pool, purchases, spent, actions, extra });
         }
 
         // --- lettura stato -------------------------------------------------
 
         const view = {
             get budget() { return budget; },
+            get rosterSize() { return rosterSize; },
             get pool() { return pool; },
             get purchases() { return purchases; },
             get spent() { return spent; },
@@ -121,6 +144,22 @@
              * per tutta l'asta: è il controllo che i crediti non si perdano.
              */
             allocated() { return view.sumMax() + spent; },
+
+            /** Slot di rosa ancora da riempire. Zero se non hai fissato una rosa. */
+            slotsLeft() { return rosterSize ? Math.max(0, rosterSize - purchases.length) : 0; },
+
+            /**
+             * Crediti da tenere da parte per riuscire comunque a riempire la rosa:
+             * almeno 1 a testa per ogni slot che resterà vuoto dopo questo acquisto.
+             */
+            reserve() { return Math.max(0, view.slotsLeft() - 1); },
+
+            /**
+             * Il massimo che puoi davvero pagare adesso per un giocatore.
+             * È questo il limite vero: il `max` della lista è solo il tuo piano,
+             * e in asta lo puoi sforare finché i crediti reggono.
+             */
+            maxSpendable() { return Math.max(0, view.left() - view.reserve()); },
 
             countsByRole() {
                 const c = { P: 0, D: 0, C: 0, A: 0 };
@@ -153,29 +192,45 @@
 
         /**
          * Dato quanto sta offrendo un altro, dice se rilanciare e a quanto.
-         * @returns {{status:'bid'|'stop'|'invalid'|'unknown'|'already-bought', bid:number|null, max:number|null}}
+         *
+         * Ci sono due soglie diverse e non vanno confuse:
+         *  - `max` del giocatore è il tuo piano, sforabile;
+         *  - `maxSpendable()` è il limite vero, che dipende dai crediti rimasti
+         *    e da quanti giocatori devi ancora comprare.
+         *
+         * @returns {{status:'bid'|'over'|'stop'|'invalid'|'unknown'|'already-bought',
+         *            bid:number|null, max:number|null, cap:number, overBy:number}}
+         *   'over' = puoi permettertelo ma stai sforando il piano
+         *   'stop' = non puoi permettertelo, punto
          */
         function bidAdvice(nameOrPlayer, currentOffer) {
             const player = typeof nameOrPlayer === 'string' ? view.find(nameOrPlayer) : nameOrPlayer;
+            const cap = view.maxSpendable();
+            const base = { bid: null, max: null, cap, overBy: 0 };
 
             if (typeof nameOrPlayer === 'string' && view.bought(nameOrPlayer)) {
-                return { status: 'already-bought', bid: null, max: null };
+                return Object.assign(base, { status: 'already-bought' });
             }
-            if (!player) return { status: 'unknown', bid: null, max: null };
+            if (!player) return Object.assign(base, { status: 'unknown' });
+
+            base.max = player.max;
 
             const cur = currentOffer === '' || currentOffer === null || currentOffer === undefined
                 ? 0
                 : toInt(currentOffer);
-            if (cur === null || cur < 0) return { status: 'invalid', bid: null, max: player.max };
+            if (cur === null || cur < 0) return Object.assign(base, { status: 'invalid' });
 
             let next = cur <= 0 ? 1 : cur + 1;
-            if (next > player.max) return { status: 'stop', bid: null, max: player.max };
 
             // Regola del 36: se il tetto è alto e siamo ancora bassi, si salta
             // direttamente a 36 per scoraggiare i rilanci a un credito per volta.
             if (cfg.easterEgg && player.max > 37 && cur < 35) next = 36;
 
-            return { status: 'bid', bid: next, max: player.max };
+            if (next > cap) return Object.assign(base, { status: 'stop' });
+            if (next > player.max) {
+                return Object.assign(base, { status: 'over', bid: next, overBy: next - player.max });
+            }
+            return Object.assign(base, { status: 'bid', bid: next });
         }
 
         // --- azioni --------------------------------------------------------
@@ -188,27 +243,33 @@
             const price = toInt(priceRaw);
             if (price === null || price < 0) return fail('Prezzo non valido.');
             if (view.bought(name)) return fail(`"${player.name}" risulta già acquistato.`);
-            if (spent + price > budget) {
-                return fail(`Budget insufficiente: residuo ${view.left()}, prezzo ${price}.`);
+
+            // Il tetto della lista si può sforare; questo no.
+            const cap = view.maxSpendable();
+            if (price > cap) {
+                const reserve = view.reserve();
+                return fail(reserve > 0
+                    ? `Puoi spendere al massimo ${cap}: ti restano ${view.left()} crediti e devi tenerne ${reserve} per gli altri ${reserve} giocatori da comprare.`
+                    : `Puoi spendere al massimo ${cap}: è tutto quello che ti resta.`);
             }
 
-            const snapshot = { name: player.name, max: player.max, role: player.role };
+            const taken = snapshot(player);
             removeFromPool(player.name);
 
             // Positivo se l'hai preso sotto il tuo tetto, negativo se hai sforato.
-            const leftover = snapshot.max - price;
+            const leftover = taken.max - price;
             const redistribution = credits.redistribute(pool, leftover, cfg.redistribution);
 
-            purchases.push({ name: snapshot.name, price, max: snapshot.max, role: snapshot.role });
+            purchases.push(Object.assign(snapshot(taken), { price }));
             spent += price;
-            actions.push({ type: 'win', player: snapshot, price, changes: redistribution.changes });
+            actions.push({ type: 'win', player: taken, price, changes: redistribution.changes });
             persist();
 
             return {
                 ok: true,
-                player: snapshot,
+                player: taken,
                 price,
-                over: price > snapshot.max,
+                over: price > taken.max,
                 redistribution,
                 unabsorbed: redistribution.requested - redistribution.distributed,
             };
@@ -219,16 +280,16 @@
             const player = view.find(name);
             if (!player) return fail(`"${name}" non è nella lista dei giocatori rimasti.`);
 
-            const snapshot = { name: player.name, max: player.max, role: player.role };
+            const gone = snapshot(player);
             removeFromPool(player.name);
 
-            const redistribution = credits.redistribute(pool, snapshot.max, cfg.redistribution);
-            actions.push({ type: 'loss', player: snapshot, changes: redistribution.changes });
+            const redistribution = credits.redistribute(pool, gone.max, cfg.redistribution);
+            actions.push({ type: 'loss', player: gone, changes: redistribution.changes });
             persist();
 
             return {
                 ok: true,
-                player: snapshot,
+                player: gone,
                 redistribution,
                 unabsorbed: redistribution.requested - redistribution.distributed,
             };
@@ -254,7 +315,7 @@
             }
 
             if (!view.find(last.player.name)) {
-                pool.push({ name: last.player.name, max: last.player.max, role: last.player.role });
+                pool.push(snapshot(last.player));
             }
 
             persist();
@@ -300,6 +361,18 @@
             return { ok: true, budget };
         }
 
+        /** Quanti giocatori devi avere a fine asta. 0 = nessuna riserva per gli slot. */
+        function setRosterSize(value) {
+            const n = toInt(value);
+            if (n === null || n < 0) return fail('Numero di giocatori non valido.');
+            if (n && n < purchases.length) {
+                return fail(`Ne hai già comprati ${purchases.length}: la rosa non può essere più piccola.`);
+            }
+            rosterSize = n;
+            persist();
+            return { ok: true, rosterSize };
+        }
+
         // --- persistenza ---------------------------------------------------
 
         /** Ricarica lo stato salvato. Se manca o è incoerente, non tocca niente. */
@@ -311,10 +384,11 @@
             const restoredPool = normalizePlayers(s.pool).players;
             const restoredPurchases = Array.isArray(s.purchases)
                 ? s.purchases.filter(p => p && p.name && toInt(p.price) !== null)
-                    .map(p => ({ name: String(p.name), price: toInt(p.price), max: toInt(p.max), role: p.role }))
+                    .map(p => ({ name: String(p.name), price: toInt(p.price), max: toInt(p.max), role: p.role, team: p.team }))
                 : [];
 
             budget = toInt(s.budget) ?? budget;
+            rosterSize = Math.max(0, toInt(s.rosterSize) ?? rosterSize);
             pool = restoredPool;
             purchases = restoredPurchases;
             spent = restoredPurchases.reduce((a, p) => a + p.price, 0);
@@ -328,39 +402,32 @@
         // --- export --------------------------------------------------------
 
         /**
-         * Colonne adattive: il ruolo compare solo se la lista ce l'ha, e il tuo
-         * massimale solo se non è un dato da tenere per te (mercato di riparazione).
+         * Colonne adattive: ruolo e squadra compaiono solo se la lista li ha, e
+         * il tuo massimale solo se non è un dato da tenere per te (riparazione).
          */
         function csvRows() {
-            const withRole = purchases.some(p => !!p.role);
-            const withMax = !cfg.hideMaxInCsv;
-
-            const header = ['Nome'];
-            if (withRole) header.push('Ruolo');
-            header.push('Prezzo');
-            if (withMax) header.push('Tuo massimale');
-
-            const rows = [header];
-            for (const p of purchases) {
-                const row = [p.name];
-                if (withRole) row.push(p.role || '');
-                row.push(String(p.price));
-                if (withMax) row.push(p.max === null || p.max === undefined ? '' : String(p.max));
-                rows.push(row);
+            const columns = [{ head: 'Nome', of: p => p.name }];
+            if (purchases.some(p => p.role)) columns.push({ head: 'Ruolo', of: p => p.role || '' });
+            if (purchases.some(p => p.team)) columns.push({ head: 'Squadra', of: p => p.team || '' });
+            columns.push({ head: 'Prezzo', of: p => String(p.price), isTotal: true });
+            if (!cfg.hideMaxInCsv) {
+                columns.push({ head: 'Tuo massimale', of: p => (p.max === null || p.max === undefined ? '' : String(p.max)) });
             }
 
-            const pad = (label, value) => {
-                const row = [label];
-                if (withRole) row.push('');
-                row.push(String(value));
-                if (withMax) row.push('');
-                return row;
-            };
+            const rows = [columns.map(c => c.head)];
+            for (const p of purchases) rows.push(columns.map(c => c.of(p)));
+
+            // Le righe di riepilogo mettono l'etichetta nella prima colonna e il
+            // numero sotto "Prezzo", così restano allineate qualunque colonna ci sia.
+            const summary = (label, value) => columns.map((c, i) => {
+                if (i === 0) return label;
+                return c.isTotal ? String(value) : '';
+            });
 
             rows.push([]);
-            rows.push(pad('Budget', budget));
-            rows.push(pad('Totale speso', spent));
-            rows.push(pad('Residuo', view.left()));
+            rows.push(summary('Budget', budget));
+            rows.push(summary('Totale speso', spent));
+            rows.push(summary('Residuo', view.left()));
             return rows;
         }
 
@@ -381,6 +448,7 @@
             reset,
             loadPlayers,
             setBudget,
+            setRosterSize,
             restore,
             persist,
             clearSaved,

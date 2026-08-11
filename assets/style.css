@@ -261,6 +261,18 @@ a {
 #counters .pill:nth-child(3) { border-color: #22c55e; }
 #counters .pill:nth-child(4) { border-color: #ec4899; }
 
+/* Il limite di spesa: è il numero che guardi mentre rilanci, deve saltare all'occhio. */
+.pill.pill-cap {
+    border-color: var(--primary);
+    border-width: 2px;
+    font-weight: 700;
+}
+
+.pill.pill-danger {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
 /* --- form ------------------------------------------------------------------ */
 
 label {

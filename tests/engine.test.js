@@ -35,6 +35,53 @@ test('normalizePlayers accetta sia max che bid e scarta le righe rotte', () => {
     assert.equal(problems.length, 3);
 });
 
+test('normalizePlayers tiene la squadra, da team o da squadra', () => {
+    const { players } = normalizePlayers([
+        { name: 'Con team', max: 1, team: 'Roma' },
+        { name: 'Con squadra', max: 1, squadra: 'Napoli' },
+        { name: 'Senza', max: 1 },
+        { name: 'Vuota', max: 1, team: '   ' },
+    ]);
+    assert.deepEqual(players.map(p => p.team), ['Roma', 'Napoli', undefined, undefined]);
+});
+
+// --- il campo squadra attraversa tutto il ciclo di vita ---------------------
+
+test('la squadra sopravvive ad acquisto, undo, salvataggio ed export', () => {
+    const backend = memoryBackend();
+    const opts = {
+        budget: 100,
+        players: [{ name: 'Hojlund', role: 'A', team: 'Napoli', max: 100 }],
+        storageKey: 'test:team',
+        storageVersion: 1,
+        storageBackend: backend,
+    };
+    const e = createEngine(opts);
+
+    const res = e.win('Hojlund', 40);
+    assert.equal(res.player.team, 'Napoli');
+    assert.equal(e.purchases[0].team, 'Napoli');
+
+    const rows = e.csvRows();
+    assert.deepEqual(rows[0], ['Nome', 'Ruolo', 'Squadra', 'Prezzo', 'Tuo massimale']);
+    assert.deepEqual(rows[1], ['Hojlund', 'A', 'Napoli', '40', '100']);
+    assert.deepEqual(rows.at(-1), ['Residuo', '', '', '60', '']);
+
+    const ricaricato = createEngine(opts);
+    ricaricato.restore();
+    assert.equal(ricaricato.purchases[0].team, 'Napoli');
+
+    ricaricato.undo();
+    assert.equal(ricaricato.find('Hojlund').team, 'Napoli', 'torna in lista con la sua squadra');
+    assert.equal(ricaricato.find('Hojlund').role, 'A');
+});
+
+test('senza squadre il CSV non aggiunge la colonna', () => {
+    const e = nuovo();
+    e.win('Attaccante', 10);
+    assert.ok(!e.csvRows()[0].includes('Squadra'));
+});
+
 // --- invariante del budget --------------------------------------------------
 
 test('somma tetti + speso resta uguale al budget durante tutta l asta', () => {
@@ -84,7 +131,8 @@ test('win rifiuta chi non è in lista, i doppioni e chi sfora il budget', () => 
     assert.ok(e.win('Portiere', 10).ok);
     assert.match(e.win('Portiere', 10).message, /non è nella lista/, 'ormai è fuori dalla lista');
 
-    assert.match(e.win('Attaccante', 200).message, /Budget insufficiente/);
+    // Il tetto del giocatore si può sforare, i crediti no.
+    assert.match(e.win('Attaccante', 200).message, /al massimo 90/);
 });
 
 test('il nome viene riconosciuto anche con accenti e maiuscole diverse', () => {
@@ -150,12 +198,18 @@ test('undo senza azioni da annullare non rompe niente', () => {
 
 const pick = ({ status, bid }) => ({ status, bid });
 
-test('bidAdvice rilancia di uno e si ferma al tetto', () => {
+test('bidAdvice rilancia di uno e segnala quando si esce dal piano', () => {
     const e = nuovo();
     assert.deepEqual(pick(e.bidAdvice('Attaccante', 10)), { status: 'bid', bid: 11 });
     assert.deepEqual(pick(e.bidAdvice('Attaccante', '')), { status: 'bid', bid: 1 });
     assert.deepEqual(pick(e.bidAdvice('Attaccante', 39)), { status: 'bid', bid: 40 });
-    assert.deepEqual(pick(e.bidAdvice('Attaccante', 40)), { status: 'stop', bid: null });
+
+    // Oltre il tetto pianificato, ma i crediti ci sono: si può fare.
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 40)), { status: 'over', bid: 41 });
+
+    // Oltre i crediti disponibili: qui ci si ferma davvero.
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 100)), { status: 'stop', bid: null });
+
     assert.deepEqual(pick(e.bidAdvice('Attaccante', -1)), { status: 'invalid', bid: null });
     assert.deepEqual(pick(e.bidAdvice('Fantasma', 5)), { status: 'unknown', bid: null });
 });

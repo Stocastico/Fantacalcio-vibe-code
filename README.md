@@ -16,20 +16,47 @@ Niente build, niente server, niente account: apri il file `.html` col doppio cli
 │       ├── app-auction.js
 │       └── app-market.js
 ├── tests/                            npm test
-├── tools/build-standalone.mjs        npm run build
+├── tools/
+│   ├── build-standalone.mjs          npm run build
+│   └── csv-to-players.mjs            npm run import
 └── 2025-2026/                        archivio della stagione scorsa
 ```
 
-## Da fare prima dell'asta
+## Aggiornare la lista
 
-1. Apri [`assets/js/data/players.js`](assets/js/data/players.js) e **sostituisci la lista**:
-   al momento contiene quella del 2025/26 come segnaposto.
-   Ogni riga è `{ name: 'Cognome', role: 'P'|'D'|'C'|'A', max: <crediti> }`, dove `max`
-   è il *tuo* tetto di spesa, non il prezzo di listino.
-2. Controlla che la somma dei `max` faccia esattamente il budget (`AUCTION_BUDGET`, ora 500).
-   Se non torna, la pagina te lo scrive in un banner in alto.
-3. Stessa cosa in [`assets/js/data/market-pool.js`](assets/js/data/market-pool.js) per la riparazione.
-4. Se hai modificato qualcosa e vuoi anche i file portabili aggiornati: `npm run build`.
+La lista vive in [`assets/js/data/players.js`](assets/js/data/players.js). Ogni riga è
+`{ name: "Cognome", role: "P"|"D"|"C"|"A", team: "Squadra", max: <crediti> }`, dove
+`max` è il *tuo* tetto di spesa, non il prezzo di listino. `role` e `team` sono opzionali.
+
+Due modi per cambiarla.
+
+**Da CSV** (comodo se la tieni in un foglio di calcolo):
+
+```bash
+npm run import -- lista.csv          # riscrive players.js
+npm run build                        # rigenera i file portabili
+```
+
+Il CSV deve avere un'intestazione; le colonne vengono riconosciute per nome, in italiano
+o in inglese (`Giocatore`/`Nome`/`Name`, `Ruolo`/`Role`, `Squadra`/`Team`, `Max`/`Tetto`/`Bid`).
+L'ordine delle colonne non conta e quelle in più vengono ignorate.
+
+```csv
+Ruolo,Giocatore,Squadra,Max
+A,Hojlund,Napoli,102
+C,Orsolini,Bologna,60
+```
+
+Opzioni utili: `--dry-run` per vedere cosa scriverebbe senza toccare niente,
+`--budget N` per forzare il budget, `--target market` per aggiornare il pool della
+riparazione invece della lista dell'asta.
+
+**A mano**: `players.js` è un normale file JavaScript, puoi editarlo direttamente.
+In entrambi i casi `npm test` verifica che la lista sia coerente (niente duplicati,
+massimali interi, somma che non sfora il budget) prima che te ne accorga in asta.
+
+La somma dei `max` dovrebbe fare esattamente il budget (`AUCTION_BUDGET`, ora 500).
+Se non torna, la pagina te lo scrive in un banner in alto.
 
 ## Le due pagine
 
@@ -40,23 +67,65 @@ Il flusso è: scegli chi chiamare → segui i rilanci → registri l'esito.
 - **Estrai e inizia asta**: pesca a caso dalla tua lista e apre l'asta partendo da 1.
 - **Chiama il più caro**: ti dà il giocatore col tetto più alto ancora libero.
 - **Cerca per nome**: match parziale, accenti e maiuscole ignorati (`vlahovic` trova `Vlahović`).
-- **Calcola la mia offerta**: scrivi l'offerta che c'è sul tavolo, ti dice a quanto rilanciare
-  o ti dice STOP se sei arrivato al tuo tetto.
+  Ruolo e squadra vengono mostrati accanto al nome, per non confondere gli omonimi.
+- **Calcola la mia offerta**: scrivi l'offerta che c'è sul tavolo, ti dice a quanto
+  rilanciare, se stai sforando il tuo piano, o se non hai più i crediti
+  (vedi "Sforare il tetto di un giocatore").
 - **Preso io** / **Andato ad altri**: registrano l'esito e ridistribuiscono i crediti.
 - **Annulla ultima azione**: torna indietro di un passo, ridistribuzione compresa.
-- **Esporta CSV**, **Reset totale**, budget modificabile a mano.
+- **Esporta CSV**, **Reset totale**, budget e dimensione della rosa modificabili
+  dalla pagina.
 
 ### `market-auction.html` — mercato di riparazione
 
 Pool unico senza ruoli, pensato per quando **qualcuno ti guarda lo schermo**: i tuoi
 massimali non vengono mai stampati a video né esportati nel CSV. L'app dice solo
-"rilancia a X" oppure "STOP".
+"rilancia a X", "sei oltre il tuo massimo" o "STOP", mai il numero.
 
 - **Prossimo**: chiama il giocatore col massimale più alto rimasto.
 - **Offerte degli altri**: scrivi nome e offerta corrente, ti dice se rilanciare,
   se fermarti, se non ti interessa o se l'hai già preso.
+- Anche qui il massimale si può sforare, ma i messaggi non lo nominano mai:
+  dicono solo "sei oltre il tuo massimo", senza il numero.
 
 > Nota: nasconde i massimali *a schermo*, non nel file. Chiunque apra il sorgente li legge.
+
+## Sforare il tetto di un giocatore
+
+Il `max` che metti nella lista è un **piano, non un vincolo**: dal vivo capita di
+volere un giocatore più di quanto avevi previsto, e l'app te lo lascia fare.
+
+Il limite vero è un altro, ed è la pillola **"Max spendibile"** in alto:
+
+```
+max spendibile = crediti residui − 1 per ogni slot di rosa che resterà vuoto
+```
+
+Se devi comprare 25 giocatori e non ne hai ancora presi, sul primo puoi arrivare a
+`500 − 24 = 476`: gli altri 24 crediti servono a non ritrovarti con la rosa incompleta
+e zero crediti. Il numero si aggiorna a ogni acquisto.
+
+Il totale della rosa lo imposti nel riquadro "Lista e impostazioni" (default: la
+lunghezza della lista). **Mettilo a 0** se non vuoi nessuna riserva: il limite diventa
+semplicemente il residuo.
+
+Attenzione a non confondere due pillole che sembrano simili:
+
+| Pillola | Cos'è |
+|---|---|
+| **In lista** | quanti giocatori restano nella tua wishlist |
+| **Da comprare** | quanti slot di rosa devi ancora riempire |
+
+Scendono in modo diverso: se un giocatore va a un avversario esce dalla lista, ma lo
+slot resta da riempire. "Da comprare" cala **solo quando compri**.
+
+In asta il pulsante *Calcola la mia offerta* distingue tre casi:
+
+| | Cosa vuol dire |
+|---|---|
+| 💰 **Rilancia a N** | dentro il tuo piano |
+| ⚠️ **Sopra il tuo tetto** | puoi permettertelo, ma quei crediti li togli agli altri |
+| ⛔ **STOP** | non ci sono i crediti: qui ci si ferma davvero |
 
 ## Come funziona la ridistribuzione dei crediti
 
@@ -68,20 +137,25 @@ somma dei tetti rimasti + crediti spesi = budget
 
 - Prendi un giocatore **sotto** il tuo tetto → la differenza va agli altri.
 - Il giocatore va a un avversario → tutto il suo tetto va agli altri.
-- Paghi **sopra** il tuo tetto → lo sforamento viene tolto dai tetti degli altri.
+- Paghi **sopra** il tuo tetto → lo sforamento viene **tolto** dai tetti degli altri,
+  senza mai scendere sotto 1 credito a testa. Se paghi 100 un giocatore che avevi
+  valutato 1, i 99 in più li perdono gli altri: la lista si riallinea da sola a quello
+  che puoi ancora spendere davvero.
 
 Nell'asta principale i crediti si distribuiscono uno alla volta a rotazione, dal più
 caro in giù. Nella riparazione si dividono in parti uguali fra i tre più cari.
-Se l'invariante si rompe (lista esaurita, o lista di partenza che non quadra) la pagina
-lo scrive in un banner invece di lasciarti scoprire il buco a fine asta.
+Se l'invariante si rompe (lista esaurita, sforamento non più recuperabile, o lista di
+partenza che non quadra) la pagina lo scrive in un banner invece di lasciarti scoprire
+il buco a fine asta.
 
 ## Sviluppo
 
 Nessuna dipendenza da installare: serve solo Node ≥ 20 per test e build.
 
 ```bash
-npm test        # suite in node --test, tutta logica pura
-npm run build   # rigenera i due file *-standalone.html
+npm test                     # suite in node --test
+npm run build                # rigenera i due file *-standalone.html
+npm run import -- lista.csv  # rigenera players.js da un CSV
 ```
 
 I file `*-standalone.html` sono **generati**: non modificarli a mano, le tue modifiche
@@ -124,6 +198,11 @@ Niente ESM lato pagina, perché i moduli ES non si caricano da `file://`.
 
 **Aggiunto**
 
+- **Sforamento controllato**: si può pagare più del tetto pianificato, entro un limite
+  che tiene conto dei crediti rimasti e degli slot di rosa ancora da riempire.
+- **Campo squadra** nelle liste, mostrato accanto al nome in asta e nell'export CSV.
+- **Import da CSV** (`npm run import`), così la lista si aggiorna da un foglio di calcolo
+  senza scrivere JavaScript a mano.
 - Salvataggio automatico anche nell'asta principale: se il browser si chiude a metà
   asta, riapri e riprendi da dove eri. Prima lo aveva solo la riparazione.
 - Budget modificabile dalla pagina, senza toccare il codice.
