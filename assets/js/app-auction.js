@@ -36,8 +36,10 @@
         if (tone) el.classList.add(`is-${tone}`);
     }
 
+    /** "Hojlund (A, Napoli)" — ruolo e squadra compaiono solo se la lista li ha. */
     function describePlayer(p) {
-        return p.role ? `${p.name} (${p.role})` : p.name;
+        const details = [p.role, p.team].filter(Boolean).join(', ');
+        return details ? `${p.name} (${details})` : p.name;
     }
 
     // --- rendering ----------------------------------------------------------

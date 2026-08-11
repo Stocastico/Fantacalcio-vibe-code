@@ -27,6 +27,11 @@
 
     let current = null;
 
+    /** Come nell'asta principale, ma senza mai il massimale. */
+    function describePlayer(p) {
+        return p.team ? `${p.name} (${p.team})` : p.name;
+    }
+
     function say(el, message, tone) {
         el.textContent = message;
         el.classList.remove('is-ok', 'is-warn', 'is-error');
@@ -63,7 +68,7 @@
         for (const p of engine.purchases) {
             const li = document.createElement('li');
             const label = document.createElement('span');
-            label.textContent = p.name;
+            label.textContent = describePlayer(p);
             const price = document.createElement('strong');
             price.textContent = String(p.price);
             li.append(label, price);
@@ -98,7 +103,7 @@
 
     function openAuction(player) {
         current = player;
-        $('playerInfo').textContent = player.name;
+        $('playerInfo').textContent = describePlayer(player);
         $('currentOffer').value = '1';
         say($('outAuction'), '');
         $('auctionSection').hidden = false;
@@ -127,7 +132,7 @@
     $('btnNextCall').addEventListener('click', () => {
         const p = engine.nextByMax();
         if (!p) { say($('outCheck'), '❌ Pool vuoto.', 'error'); closeAuction(); return; }
-        say($('outCheck'), `➡️ Prossimo: ${p.name}`, 'ok');
+        say($('outCheck'), `➡️ Prossimo: ${describePlayer(p)}`, 'ok');
         openAuction(p);
     });
 

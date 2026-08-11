@@ -16,20 +16,47 @@ Niente build, niente server, niente account: apri il file `.html` col doppio cli
 │       ├── app-auction.js
 │       └── app-market.js
 ├── tests/                            npm test
-├── tools/build-standalone.mjs        npm run build
+├── tools/
+│   ├── build-standalone.mjs          npm run build
+│   └── csv-to-players.mjs            npm run import
 └── 2025-2026/                        archivio della stagione scorsa
 ```
 
-## Da fare prima dell'asta
+## Aggiornare la lista
 
-1. Apri [`assets/js/data/players.js`](assets/js/data/players.js) e **sostituisci la lista**:
-   al momento contiene quella del 2025/26 come segnaposto.
-   Ogni riga è `{ name: 'Cognome', role: 'P'|'D'|'C'|'A', max: <crediti> }`, dove `max`
-   è il *tuo* tetto di spesa, non il prezzo di listino.
-2. Controlla che la somma dei `max` faccia esattamente il budget (`AUCTION_BUDGET`, ora 500).
-   Se non torna, la pagina te lo scrive in un banner in alto.
-3. Stessa cosa in [`assets/js/data/market-pool.js`](assets/js/data/market-pool.js) per la riparazione.
-4. Se hai modificato qualcosa e vuoi anche i file portabili aggiornati: `npm run build`.
+La lista vive in [`assets/js/data/players.js`](assets/js/data/players.js). Ogni riga è
+`{ name: "Cognome", role: "P"|"D"|"C"|"A", team: "Squadra", max: <crediti> }`, dove
+`max` è il *tuo* tetto di spesa, non il prezzo di listino. `role` e `team` sono opzionali.
+
+Due modi per cambiarla.
+
+**Da CSV** (comodo se la tieni in un foglio di calcolo):
+
+```bash
+npm run import -- lista.csv          # riscrive players.js
+npm run build                        # rigenera i file portabili
+```
+
+Il CSV deve avere un'intestazione; le colonne vengono riconosciute per nome, in italiano
+o in inglese (`Giocatore`/`Nome`/`Name`, `Ruolo`/`Role`, `Squadra`/`Team`, `Max`/`Tetto`/`Bid`).
+L'ordine delle colonne non conta e quelle in più vengono ignorate.
+
+```csv
+Ruolo,Giocatore,Squadra,Max
+A,Hojlund,Napoli,102
+C,Orsolini,Bologna,60
+```
+
+Opzioni utili: `--dry-run` per vedere cosa scriverebbe senza toccare niente,
+`--budget N` per forzare il budget, `--target market` per aggiornare il pool della
+riparazione invece della lista dell'asta.
+
+**A mano**: `players.js` è un normale file JavaScript, puoi editarlo direttamente.
+In entrambi i casi `npm test` verifica che la lista sia coerente (niente duplicati,
+massimali interi, somma che non sfora il budget) prima che te ne accorga in asta.
+
+La somma dei `max` dovrebbe fare esattamente il budget (`AUCTION_BUDGET`, ora 500).
+Se non torna, la pagina te lo scrive in un banner in alto.
 
 ## Le due pagine
 
@@ -40,6 +67,7 @@ Il flusso è: scegli chi chiamare → segui i rilanci → registri l'esito.
 - **Estrai e inizia asta**: pesca a caso dalla tua lista e apre l'asta partendo da 1.
 - **Chiama il più caro**: ti dà il giocatore col tetto più alto ancora libero.
 - **Cerca per nome**: match parziale, accenti e maiuscole ignorati (`vlahovic` trova `Vlahović`).
+  Ruolo e squadra vengono mostrati accanto al nome, per non confondere gli omonimi.
 - **Calcola la mia offerta**: scrivi l'offerta che c'è sul tavolo, ti dice a quanto rilanciare
   o ti dice STOP se sei arrivato al tuo tetto.
 - **Preso io** / **Andato ad altri**: registrano l'esito e ridistribuiscono i crediti.
@@ -80,8 +108,9 @@ lo scrive in un banner invece di lasciarti scoprire il buco a fine asta.
 Nessuna dipendenza da installare: serve solo Node ≥ 20 per test e build.
 
 ```bash
-npm test        # suite in node --test, tutta logica pura
-npm run build   # rigenera i due file *-standalone.html
+npm test                     # suite in node --test
+npm run build                # rigenera i due file *-standalone.html
+npm run import -- lista.csv  # rigenera players.js da un CSV
 ```
 
 I file `*-standalone.html` sono **generati**: non modificarli a mano, le tue modifiche
@@ -124,6 +153,9 @@ Niente ESM lato pagina, perché i moduli ES non si caricano da `file://`.
 
 **Aggiunto**
 
+- **Campo squadra** nelle liste, mostrato accanto al nome in asta e nell'export CSV.
+- **Import da CSV** (`npm run import`), così la lista si aggiorna da un foglio di calcolo
+  senza scrivere JavaScript a mano.
 - Salvataggio automatico anche nell'asta principale: se il browser si chiude a metà
   asta, riapri e riprendi da dove eri. Prima lo aveva solo la riparazione.
 - Budget modificabile dalla pagina, senza toccare il codice.

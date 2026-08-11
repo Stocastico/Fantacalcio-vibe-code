@@ -5,9 +5,10 @@
  * node senza browser e le due pagine possono avere UI diverse sopra lo stesso
  * comportamento.
  *
- * Modello dati unico: ogni giocatore è { name, max, role? }.
+ * Modello dati unico: ogni giocatore è { name, max, role?, team? }.
  *  - `max`  è il tuo tetto di spesa, non il prezzo di listino
  *  - `role` (P/D/C/A) è opzionale: il mercato di riparazione ha un pool unico
+ *  - `team` è opzionale, serve solo a distinguere gli omonimi a colpo d'occhio
  */
 ;(function (global) {
     'use strict';
@@ -23,9 +24,10 @@
     const VALID_ROLES = ['P', 'D', 'C', 'A'];
 
     /**
-     * Porta una lista qualsiasi nella forma { name, max, role }.
-     * Accetta sia `max` che `bid` (il nome usato nelle stagioni precedenti).
-     * Scarta le righe inutilizzabili e i doppioni, riportando cosa ha scartato.
+     * Porta una lista qualsiasi nella forma { name, max, role, team }.
+     * Accetta sia `max` che `bid` (il nome usato nelle stagioni precedenti) e
+     * sia `team` che `squadra`. Scarta le righe inutilizzabili e i doppioni,
+     * riportando cosa ha scartato.
      */
     function normalizePlayers(list) {
         const players = [];
@@ -48,8 +50,14 @@
             if (seen.has(key)) { problems.push(`${label} (${name}): duplicato, tengo il primo.`); return; }
             seen.add(key);
 
-            const role = String(raw.role ?? '').toUpperCase();
-            players.push({ name, max, role: VALID_ROLES.includes(role) ? role : undefined });
+            const role = String(raw.role ?? raw.ruolo ?? '').toUpperCase();
+            const team = String(raw.team ?? raw.squadra ?? '').trim();
+            players.push({
+                name,
+                max,
+                role: VALID_ROLES.includes(role) ? role : undefined,
+                team: team || undefined,
+            });
         });
 
         return { players, problems };
@@ -91,7 +99,12 @@
         let extra = {};     // spazio libero per stato specifico della singola pagina
 
         function clone(list) {
-            return list.map(p => ({ name: p.name, max: p.max, role: p.role }));
+            return list.map(p => ({ name: p.name, max: p.max, role: p.role, team: p.team }));
+        }
+
+        /** Copia dei dati identificativi di un giocatore, senza il riferimento all'oggetto nel pool. */
+        function snapshot(p) {
+            return { name: p.name, max: p.max, role: p.role, team: p.team };
         }
 
         function persist() {
@@ -192,23 +205,23 @@
                 return fail(`Budget insufficiente: residuo ${view.left()}, prezzo ${price}.`);
             }
 
-            const snapshot = { name: player.name, max: player.max, role: player.role };
+            const taken = snapshot(player);
             removeFromPool(player.name);
 
             // Positivo se l'hai preso sotto il tuo tetto, negativo se hai sforato.
-            const leftover = snapshot.max - price;
+            const leftover = taken.max - price;
             const redistribution = credits.redistribute(pool, leftover, cfg.redistribution);
 
-            purchases.push({ name: snapshot.name, price, max: snapshot.max, role: snapshot.role });
+            purchases.push(Object.assign(snapshot(taken), { price }));
             spent += price;
-            actions.push({ type: 'win', player: snapshot, price, changes: redistribution.changes });
+            actions.push({ type: 'win', player: taken, price, changes: redistribution.changes });
             persist();
 
             return {
                 ok: true,
-                player: snapshot,
+                player: taken,
                 price,
-                over: price > snapshot.max,
+                over: price > taken.max,
                 redistribution,
                 unabsorbed: redistribution.requested - redistribution.distributed,
             };
@@ -219,16 +232,16 @@
             const player = view.find(name);
             if (!player) return fail(`"${name}" non è nella lista dei giocatori rimasti.`);
 
-            const snapshot = { name: player.name, max: player.max, role: player.role };
+            const gone = snapshot(player);
             removeFromPool(player.name);
 
-            const redistribution = credits.redistribute(pool, snapshot.max, cfg.redistribution);
-            actions.push({ type: 'loss', player: snapshot, changes: redistribution.changes });
+            const redistribution = credits.redistribute(pool, gone.max, cfg.redistribution);
+            actions.push({ type: 'loss', player: gone, changes: redistribution.changes });
             persist();
 
             return {
                 ok: true,
-                player: snapshot,
+                player: gone,
                 redistribution,
                 unabsorbed: redistribution.requested - redistribution.distributed,
             };
@@ -254,7 +267,7 @@
             }
 
             if (!view.find(last.player.name)) {
-                pool.push({ name: last.player.name, max: last.player.max, role: last.player.role });
+                pool.push(snapshot(last.player));
             }
 
             persist();
@@ -311,7 +324,7 @@
             const restoredPool = normalizePlayers(s.pool).players;
             const restoredPurchases = Array.isArray(s.purchases)
                 ? s.purchases.filter(p => p && p.name && toInt(p.price) !== null)
-                    .map(p => ({ name: String(p.name), price: toInt(p.price), max: toInt(p.max), role: p.role }))
+                    .map(p => ({ name: String(p.name), price: toInt(p.price), max: toInt(p.max), role: p.role, team: p.team }))
                 : [];
 
             budget = toInt(s.budget) ?? budget;
@@ -328,39 +341,32 @@
         // --- export --------------------------------------------------------
 
         /**
-         * Colonne adattive: il ruolo compare solo se la lista ce l'ha, e il tuo
-         * massimale solo se non è un dato da tenere per te (mercato di riparazione).
+         * Colonne adattive: ruolo e squadra compaiono solo se la lista li ha, e
+         * il tuo massimale solo se non è un dato da tenere per te (riparazione).
          */
         function csvRows() {
-            const withRole = purchases.some(p => !!p.role);
-            const withMax = !cfg.hideMaxInCsv;
-
-            const header = ['Nome'];
-            if (withRole) header.push('Ruolo');
-            header.push('Prezzo');
-            if (withMax) header.push('Tuo massimale');
-
-            const rows = [header];
-            for (const p of purchases) {
-                const row = [p.name];
-                if (withRole) row.push(p.role || '');
-                row.push(String(p.price));
-                if (withMax) row.push(p.max === null || p.max === undefined ? '' : String(p.max));
-                rows.push(row);
+            const columns = [{ head: 'Nome', of: p => p.name }];
+            if (purchases.some(p => p.role)) columns.push({ head: 'Ruolo', of: p => p.role || '' });
+            if (purchases.some(p => p.team)) columns.push({ head: 'Squadra', of: p => p.team || '' });
+            columns.push({ head: 'Prezzo', of: p => String(p.price), isTotal: true });
+            if (!cfg.hideMaxInCsv) {
+                columns.push({ head: 'Tuo massimale', of: p => (p.max === null || p.max === undefined ? '' : String(p.max)) });
             }
 
-            const pad = (label, value) => {
-                const row = [label];
-                if (withRole) row.push('');
-                row.push(String(value));
-                if (withMax) row.push('');
-                return row;
-            };
+            const rows = [columns.map(c => c.head)];
+            for (const p of purchases) rows.push(columns.map(c => c.of(p)));
+
+            // Le righe di riepilogo mettono l'etichetta nella prima colonna e il
+            // numero sotto "Prezzo", così restano allineate qualunque colonna ci sia.
+            const summary = (label, value) => columns.map((c, i) => {
+                if (i === 0) return label;
+                return c.isTotal ? String(value) : '';
+            });
 
             rows.push([]);
-            rows.push(pad('Budget', budget));
-            rows.push(pad('Totale speso', spent));
-            rows.push(pad('Residuo', view.left()));
+            rows.push(summary('Budget', budget));
+            rows.push(summary('Totale speso', spent));
+            rows.push(summary('Residuo', view.left()));
             return rows;
         }
 

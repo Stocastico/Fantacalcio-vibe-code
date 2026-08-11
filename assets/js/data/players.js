@@ -1,24 +1,22 @@
 /**
  * Lista giocatori per l'asta principale — stagione 2026/27.
  *
- * ⚠️ SEGNAPOSTO: al momento qui c'è la lista usata nella stagione 2025/26,
- * riportata in chiaro come base di partenza. Sostituiscila con la tua lista
- * nuova prima dell'asta.
+ * Generato da tools/csv-to-players.mjs, ma è un normale file JavaScript:
+ * puoi anche modificarlo a mano. Per rigenerarlo da un CSV:
+ *
+ *   npm run import -- lista.csv
  *
  * Formato di ogni riga:
- *   { name: 'Cognome',  role: 'P' | 'D' | 'C' | 'A',  max: <crediti> }
+ *   { name: "Cognome", role: "P" | "D" | "C" | "A", team: "Squadra", max: <crediti> }
  *
  *   name  come lo chiami tu; la ricerca ignora accenti e maiuscole
- *   role  P portiere, D difensore, C centrocampista, A attaccante
+ *   role  P portiere, D difensore, C centrocampista, A attaccante (opzionale)
+ *   team  solo per riconoscere gli omonimi a colpo d'occhio (opzionale)
  *   max   il TUO tetto di spesa per quel giocatore, non il prezzo di listino
  *
- * Regola pratica: la somma dei `max` dovrebbe fare esattamente AUCTION_BUDGET.
- * Se non torna, l'app te lo segnala in alto con un avviso — non è un errore
- * bloccante, ma vuol dire che stai pianificando più o meno di quello che hai.
+ * La somma dei massimali fa 500, esattamente il budget.
  *
- * Dalla stagione 2025/26 è cambiato questo: la lista non è più offuscata con
- * passphrase. L'asta si fa in presenza, quindi non c'è niente da nascondere
- * a chi apre il sorgente. Occhio però: questo repo è pubblico.
+ * Nota: la lista non è offuscata e questo repository è pubblico.
  */
 ;(function (global) {
     'use strict';
@@ -26,38 +24,38 @@
     const AUCTION_BUDGET = 500;
 
     const PLAYERS = [
-        // Portieri
-        { name: 'Falcone', role: 'P', max: 8 },
-        { name: 'Butez', role: 'P', max: 7 },
-        { name: 'Turati', role: 'P', max: 5 },
+        // Portieri — 3, 45 crediti
+        { name: "Svilar",        role: "P", team: "Roma",     max:  36 },
+        { name: "Falcone",       role: "P", team: "Lecce",    max:   8 },
+        { name: "Paleari",       role: "P", team: "Torino",   max:   1 },
 
-        // Difensori
-        { name: 'Zappacosta', role: 'D', max: 15 },
-        { name: 'Gatti', role: 'D', max: 14 },
-        { name: 'Posch', role: 'D', max: 11 },
-        { name: 'Bellanova', role: 'D', max: 11 },
-        { name: 'Parisi', role: 'D', max: 10 },
-        { name: 'Doig', role: 'D', max: 10 },
-        { name: 'Valeri', role: 'D', max: 8 },
-        { name: 'Zappa', role: 'D', max: 8 },
+        // Difensori — 8, 115 crediti
+        { name: "Mancini",       role: "D", team: "Roma",     max:  28 },
+        { name: "N'Dicka",       role: "D", team: "Roma",     max:  23 },
+        { name: "Rrahmani",      role: "D", team: "Napoli",   max:  20 },
+        { name: "Bisseck",       role: "D", team: "Inter",    max:  14 },
+        { name: "Gila",          role: "D", team: "Milan",    max:  13 },
+        { name: "Circati",       role: "D", team: "Parma",    max:   8 },
+        { name: "Tiago Gabriel", role: "D", team: "Lecce",    max:   5 },
+        { name: "Haps",          role: "D", team: "Venezia",  max:   4 },
 
-        // Centrocampisti
-        { name: 'McTominay', role: 'C', max: 45 },
-        { name: 'Koopmeiners', role: 'C', max: 28 },
-        { name: 'Ferguson', role: 'C', max: 22 },
-        { name: 'Pasalic', role: 'C', max: 19 },
-        { name: 'Mkhitaryan', role: 'C', max: 18 },
-        { name: 'Brescianini', role: 'C', max: 15 },
-        { name: 'Baldanzi', role: 'C', max: 13 },
-        { name: 'Ilic', role: 'C', max: 10 },
+        // Centrocampisti — 8, 128 crediti
+        { name: "Orsolini",      role: "C", team: "Bologna",  max:  60 },
+        { name: "Vlasic",        role: "C", team: "Torino",   max:  21 },
+        { name: "Thorstvedt",    role: "C", team: "Sassuolo", max:  13 },
+        { name: "Casadei",       role: "C", team: "Torino",   max:  11 },
+        { name: "Ekkelenkamp",   role: "C", team: "Udinese",  max:  10 },
+        { name: "Rowe",          role: "C", team: "Bologna",  max:   8 },
+        { name: "Bernabe",       role: "C", team: "Parma",    max:   3 },
+        { name: "Fazzini",       role: "C", team: "Cagliari", max:   2 },
 
-        // Attaccanti
-        { name: 'Lautaro Martínez', role: 'A', max: 90 },
-        { name: 'Thuram', role: 'A', max: 50 },
-        { name: 'Vlahović', role: 'A', max: 35 },
-        { name: 'Scamacca', role: 'A', max: 22 },
-        { name: 'Orsolini', role: 'A', max: 13 },
-        { name: 'Zaccagni', role: 'A', max: 13 },
+        // Attaccanti — 6, 212 crediti
+        { name: "Hojlund",       role: "A", team: "Napoli",   max: 102 },
+        { name: "Douvikas",      role: "A", team: "Como",     max:  46 },
+        { name: "Berardi",       role: "A", team: "Sassuolo", max:  31 },
+        { name: "Raspadori",     role: "A", team: "Atalanta", max:  16 },
+        { name: "Akor Adams",    role: "A", team: "Venezia",  max:  10 },
+        { name: "Colombo",       role: "A", team: "Genoa",    max:   7 },
     ];
 
     const api = { AUCTION_BUDGET, PLAYERS };
