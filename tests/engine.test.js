@@ -1,0 +1,271 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { createEngine, normalizePlayers } = require('../assets/js/core/engine.js');
+const { memoryBackend } = require('../assets/js/core/storage.js');
+
+/** Lista giocattolo: somma dei massimali = 100, come il budget. */
+const LISTA = [
+    { name: 'Portiere', role: 'P', max: 10 },
+    { name: 'Difensore', role: 'D', max: 20 },
+    { name: 'Centrocampista', role: 'C', max: 30 },
+    { name: 'Attaccante', role: 'A', max: 40 },
+];
+
+const nuovo = (over = {}) => createEngine(Object.assign({
+    budget: 100,
+    players: LISTA,
+    redistribution: { strategy: 'spread', min: 1 },
+}, over));
+
+// --- normalizzazione della lista -------------------------------------------
+
+test('normalizePlayers accetta sia max che bid e scarta le righe rotte', () => {
+    const { players, problems } = normalizePlayers([
+        { name: 'Con max', max: 10 },
+        { name: 'Con bid', bid: 5 },          // formato delle stagioni precedenti
+        { name: '', max: 3 },                  // niente nome
+        { name: 'Senza tetto' },               // niente massimale
+        { name: 'Con Max', max: 99 },          // doppione, differisce solo per maiuscole
+        { name: 'Ruolo strano', max: 1, role: 'X' },
+    ]);
+
+    assert.deepEqual(players.map(p => p.name), ['Con max', 'Con bid', 'Ruolo strano']);
+    assert.equal(players[1].max, 5);
+    assert.equal(players[2].role, undefined, 'un ruolo non valido viene scartato, non tenuto');
+    assert.equal(problems.length, 3);
+});
+
+// --- invariante del budget --------------------------------------------------
+
+test('somma tetti + speso resta uguale al budget durante tutta l asta', () => {
+    const e = nuovo();
+    assert.equal(e.allocated(), 100);
+
+    e.win('Attaccante', 25);          // preso sotto il tetto di 40
+    assert.equal(e.allocated(), 100);
+
+    e.lose('Centrocampista');          // perso: il suo tetto va agli altri
+    assert.equal(e.allocated(), 100);
+
+    e.win('Difensore', 5);
+    assert.equal(e.allocated(), 100);
+    assert.equal(e.spent, 30);
+});
+
+test('pagare sopra il tetto toglie crediti agli altri invece di sballare i conti', () => {
+    const e = nuovo();
+    const res = e.win('Portiere', 30);   // tetto 10, pagati 30
+
+    assert.ok(res.ok);
+    assert.ok(res.over);
+    assert.equal(e.spent, 30);
+    assert.equal(e.allocated(), 100, 'i 20 di sforamento sono usciti dai tetti degli altri');
+    assert.equal(e.sumMax(), 70);
+});
+
+test('se la lista si svuota i crediti non assorbiti vengono segnalati', () => {
+    const e = createEngine({ budget: 100, players: [{ name: 'Unico', max: 100 }] });
+    const res = e.win('Unico', 40);
+
+    assert.ok(res.ok);
+    assert.equal(res.unabsorbed, 60, 'nessuno a cui girare i 60 risparmiati');
+    assert.equal(e.allocated(), 40);
+});
+
+// --- acquisti ---------------------------------------------------------------
+
+test('win rifiuta chi non è in lista, i doppioni e chi sfora il budget', () => {
+    const e = nuovo();
+
+    assert.match(e.win('Sconosciuto', 5).message, /non è nella lista/);
+    assert.match(e.win('Portiere', 'tanti').message, /Prezzo non valido/);
+    assert.match(e.win('Portiere', -1).message, /Prezzo non valido/);
+
+    assert.ok(e.win('Portiere', 10).ok);
+    assert.match(e.win('Portiere', 10).message, /non è nella lista/, 'ormai è fuori dalla lista');
+
+    assert.match(e.win('Attaccante', 200).message, /Budget insufficiente/);
+});
+
+test('il nome viene riconosciuto anche con accenti e maiuscole diverse', () => {
+    const e = createEngine({ budget: 100, players: [{ name: 'Vlahović', max: 100 }] });
+    assert.ok(e.win('vlahovic', 30).ok);
+    assert.equal(e.purchases[0].name, 'Vlahović', 'salva il nome come sta nella lista');
+});
+
+// --- undo -------------------------------------------------------------------
+
+test('undo di un acquisto rimette il giocatore in lista e ripristina i tetti', () => {
+    const e = nuovo();
+    const prima = e.pool.map(p => ({ name: p.name, max: p.max }));
+
+    e.win('Attaccante', 10);
+    assert.equal(e.spent, 10);
+    assert.equal(e.pool.length, 3);
+
+    const res = e.undo();
+    assert.ok(res.ok);
+    assert.equal(e.spent, 0);
+    assert.equal(e.purchases.length, 0);
+    assert.deepEqual(
+        e.pool.map(p => ({ name: p.name, max: p.max })).sort((a, b) => a.name.localeCompare(b.name)),
+        prima.sort((a, b) => a.name.localeCompare(b.name))
+    );
+});
+
+test('undo di una perdita ripristina anche la ridistribuzione', () => {
+    const e = nuovo();
+    e.lose('Attaccante');
+    assert.equal(e.sumMax(), 100);
+
+    e.undo();
+    assert.equal(e.pool.length, 4);
+    assert.equal(e.find('Attaccante').max, 40);
+    assert.equal(e.sumMax(), 100);
+});
+
+test('undo ripetuti tornano indietro nell ordine giusto', () => {
+    const e = nuovo();
+    e.win('Attaccante', 20);
+    e.lose('Centrocampista');
+    e.win('Difensore', 15);
+
+    e.undo(); e.undo(); e.undo();
+
+    assert.equal(e.spent, 0);
+    assert.equal(e.pool.length, 4);
+    assert.equal(e.allocated(), 100);
+    assert.deepEqual(
+        e.pool.map(p => p.max).sort((a, b) => a - b),
+        [10, 20, 30, 40]
+    );
+});
+
+test('undo senza azioni da annullare non rompe niente', () => {
+    const e = nuovo();
+    assert.equal(e.undo().ok, false);
+});
+
+// --- consiglio sul rilancio -------------------------------------------------
+
+const pick = ({ status, bid }) => ({ status, bid });
+
+test('bidAdvice rilancia di uno e si ferma al tetto', () => {
+    const e = nuovo();
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 10)), { status: 'bid', bid: 11 });
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', '')), { status: 'bid', bid: 1 });
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 39)), { status: 'bid', bid: 40 });
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', 40)), { status: 'stop', bid: null });
+    assert.deepEqual(pick(e.bidAdvice('Attaccante', -1)), { status: 'invalid', bid: null });
+    assert.deepEqual(pick(e.bidAdvice('Fantasma', 5)), { status: 'unknown', bid: null });
+});
+
+test('bidAdvice riconosce chi hai già comprato', () => {
+    const e = nuovo();
+    e.win('Portiere', 5);
+    assert.equal(e.bidAdvice('Portiere', 3).status, 'already-bought');
+});
+
+test('la regola del 36 scatta solo sui tetti alti e sulle offerte basse', () => {
+    const e = createEngine({ budget: 200, players: [{ name: 'Big', max: 90 }], easterEgg: true });
+    assert.equal(e.bidAdvice('Big', 10).bid, 36, 'salta direttamente a 36');
+    assert.equal(e.bidAdvice('Big', 36).bid, 37, 'da 35 in su si torna al rilancio normale');
+    assert.equal(e.bidAdvice('Big', 50).bid, 51);
+
+    const bassoTetto = createEngine({ budget: 200, players: [{ name: 'Small', max: 30 }], easterEgg: true });
+    assert.equal(bassoTetto.bidAdvice('Small', 10).bid, 11, 'sotto i 37 di tetto la regola non si applica');
+
+    const spenta = createEngine({ budget: 200, players: [{ name: 'Big', max: 90 }], easterEgg: false });
+    assert.equal(spenta.bidAdvice('Big', 10).bid, 11);
+});
+
+// --- budget e reset ---------------------------------------------------------
+
+test('setBudget rifiuta valori sotto quanto già speso', () => {
+    const e = nuovo();
+    e.win('Attaccante', 40);
+    assert.match(e.setBudget(10).message, /già speso/);
+    assert.ok(e.setBudget(300).ok);
+    assert.equal(e.left(), 260);
+});
+
+test('reset riporta tutto alla lista di partenza', () => {
+    const e = nuovo();
+    e.win('Attaccante', 40);
+    e.lose('Portiere');
+    e.reset();
+
+    assert.equal(e.pool.length, 4);
+    assert.equal(e.spent, 0);
+    assert.equal(e.purchases.length, 0);
+    assert.equal(e.actions.length, 0);
+    assert.equal(e.allocated(), 100);
+});
+
+// --- persistenza ------------------------------------------------------------
+
+test('lo stato sopravvive alla ricarica della pagina', () => {
+    const backend = memoryBackend();
+    const opts = { storageKey: 'test:asta', storageVersion: 1, storageBackend: backend };
+
+    const primo = nuovo(opts);
+    primo.win('Attaccante', 22);
+    primo.lose('Portiere');
+
+    const secondo = nuovo(opts);
+    assert.ok(secondo.restore());
+    assert.equal(secondo.spent, 22);
+    assert.equal(secondo.purchases[0].name, 'Attaccante');
+    assert.equal(secondo.pool.length, 2);
+    assert.equal(secondo.allocated(), 100);
+    assert.ok(secondo.undo().ok, 'anche la cronologia per l undo è stata salvata');
+});
+
+test('uno stato salvato da una versione precedente viene ignorato', () => {
+    const backend = memoryBackend();
+    const vecchio = nuovo({ storageKey: 'test:asta', storageVersion: 1, storageBackend: backend });
+    vecchio.win('Attaccante', 22);
+
+    const nuovaVersione = nuovo({ storageKey: 'test:asta', storageVersion: 2, storageBackend: backend });
+    assert.equal(nuovaVersione.restore(), false);
+    assert.equal(nuovaVersione.spent, 0);
+    assert.equal(nuovaVersione.pool.length, 4);
+});
+
+test('senza storage il motore funziona lo stesso', () => {
+    const e = nuovo({ storageKey: null });
+    assert.equal(e.storageAvailable, false);
+    assert.ok(e.win('Portiere', 5).ok);
+    assert.equal(e.restore(), false);
+});
+
+// --- export -----------------------------------------------------------------
+
+test('il CSV riporta acquisti e totali', () => {
+    const e = nuovo();
+    e.win('Attaccante', 30);
+    const rows = e.csvRows();
+
+    assert.deepEqual(rows[0], ['Nome', 'Ruolo', 'Prezzo', 'Tuo massimale']);
+    assert.deepEqual(rows[1], ['Attaccante', 'A', '30', '40']);
+    assert.deepEqual(rows.at(-1), ['Residuo', '', '70', '']);
+});
+
+test('con hideMaxInCsv il massimale non finisce nel file', () => {
+    const e = createEngine({
+        budget: 100,
+        players: [{ name: 'Tizio', max: 50 }],
+        hideMaxInCsv: true,
+    });
+    e.win('Tizio', 30);
+    const rows = e.csvRows();
+
+    assert.deepEqual(rows[0], ['Nome', 'Prezzo']);
+    assert.deepEqual(rows[1], ['Tizio', '30']);
+    assert.ok(!JSON.stringify(rows).includes('50'), 'nessuna traccia del massimale');
+});
+
+test('esportare senza acquisti avvisa invece di scaricare un file vuoto', () => {
+    const e = nuovo();
+    assert.equal(e.exportCSV('x').ok, false);
+});

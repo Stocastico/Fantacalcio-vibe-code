@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="it">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Fantacalcio – Market Auction (semplice)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <h1>Market Auction – semplice</h1>
+    <p class="muted">
+        Tutti i giocatori in un unico pool, nessuna cifratura, nessun easter egg.
+        La lista è hardcoded e non è visibile: i nomi compaiono solo quando premi <strong>Prossimo</strong>.
+    </p>
+
+    <div class="row">
+        <span class="pill" id="spentPill">Speso: 0</span>
+        <span class="pill" id="leftPill">Residuo: 416</span>
+    </div>
+
+    <div class="layout" style="margin-top:16px;">
+        <div>
+            <div class="grid">
+                <section class="card">
+                    <h3>Asta</h3>
+
+                    <div class="row">
+                        <button id="btnNextCall" title="Seleziona il prossimo giocatore in ordine: massimo più alto → più basso">Prossimo</button>
+                        <button id="btnResetAll" class="secondary" title="Ripristina pool e azzera acquisti">Reset</button>
+                    </div>
+                    <div id="outCheck" class="out"></div>
+
+                    <div id="auctionSection" style="display:none; margin-top:12px; padding:12px; border-radius:8px;">
+                        <h4 style="margin-top:0;">🏷️ Asta in corso</h4>
+                        <div id="playerInfo" style="margin-bottom:8px; font-weight:bold;"></div>
+
+                        <label for="currentOffer">La mia offerta (di default 1)</label>
+                        <input id="currentOffer" type="number" inputmode="numeric" min="1" step="1" placeholder="es. 1" />
+
+                        <div class="row" style="margin-top:8px;">
+                            <button id="btnSuggest">Suggerisci offerta</button>
+                            <button id="btnWon" class="secondary" title="Registra come vinto al valore suggerito">Vinto</button>
+                            <button id="btnLost" class="secondary">Perso</button>
+                        </div>
+
+                        <div id="outAuction" class="out"></div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h3>Offerte (altri)</h3>
+                    <p class="muted">Inserisci un nome e l'offerta attuale: ti dice se rilanciare o se non ti interessa.</p>
+
+                    <label for="offerName">Nome giocatore</label>
+                    <input id="offerName" type="text" placeholder="es. Malen" autocomplete="off" />
+
+                    <label for="offerCurrent" style="margin-top:8px;">Offerta attuale</label>
+                    <input id="offerCurrent" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 25" />
+
+                    <div class="row" style="margin-top:8px;">
+                        <button id="btnAddOffer" class="secondary">Calcola mia offerta</button>
+                    </div>
+
+                    <ul id="offersList" class="list" style="margin-top:8px;"></ul>
+                    <div id="outOffers" class="out"></div>
+                </section>
+            </div>
+        </div>
+
+        <aside class="sidebar">
+            <section class="card">
+                <h3>Acquisti</h3>
+                <p class="muted">Elenco giocatori vinti in asta (con prezzo finale).</p>
+
+                <ul id="purchasesList" class="list"></ul>
+
+                <div class="row" style="margin-top:8px;">
+                    <button id="btnUndo" class="secondary">Annulla ultimo</button>
+                    <button id="btnExportCSV" class="secondary">Esporta CSV</button>
+                </div>
+
+                <div id="outBuy" class="out"></div>
+            </section>
+        </aside>
+    </div>
+
+    <script src="market-auction.js"></script>
+    <!--
+        (() => {
+            'use strict';
+
+            const STORAGE_KEY = 'marketAuctionStateV2';
+
+            const DEFAULT_BUDGET = 416;
+            const DEFAULT_POOL = [
+                { name: 'Muric', max: 5 },
+                { name: 'Ostigard', max: 20 },
+                { name: 'Ramon', max: 20 },
+                { name: 'Cambiaghi', max: 43 },
+                { name: 'Zielinski', max: 45 },
+                { name: 'Malen', max: 127 },
+                { name: 'Orban', max: 131 }
+            ];
+
+            let budget = DEFAULT_BUDGET;
+            let pool = DEFAULT_POOL.map(p => ({ name: p.name, max: p.max }));
+            let purchases = [];
+            let spent = 0;
+            let current = null;
+            let actions = [];
+
+            const $ = (sel) => document.querySelector(sel);
+            const norm = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+            const toInt = (n) => {
+                const v = Number(n);
+                if (!Number.isFinite(v)) return null;
+                return Math.round(v);
+            };
+
+            const ui = {
+                spentPill: $('#spentPill'),
+            const curRaw = $('#currentOffer').value;
+            const cur = curRaw === '' ? 0 : toInt(curRaw);
+            if (cur == null || cur < 0) return { ok: false, message: 'Offerta attuale non valida.' };
+
+            const next = cur <= 0 ? 1 : (cur + 1);
+            if (next > current.max) {
+                lastSuggestedBid = null;
+                return { ok: false, message: `Stop: next = ${next} supera il tuo massimo (${current.max}).` };
+            }
+            lastSuggestedBid = next;
+            return { ok: true, bid: next, message: `Offriamo: ${next} crediti (max ${current.max}).` };
+        }
+
+        function removeFromPool(name) {
+            const key = norm(name);
+            const before = pool.length;
+            pool = pool.filter(p => norm(p.name) !== key);
+            return pool.length !== before;
+        }
+
+        function addPurchase(name, price, max) {
+            const outBuy = $('#outBuy');
+
+            if (!name) {
+                outBuy.textContent = '❌ Nome mancante.';
+                return false;
+            }
+            const priceInt = toInt(price);
+            if (priceInt == null || priceInt < 0) {
+                outBuy.textContent = '❌ Prezzo non valido.';
+                return false;
+            }
+            if (spent + priceInt > budget) {
+                outBuy.textContent = `❌ Budget insufficiente. Residuo ${Math.max(0, budget - spent)}, prezzo ${priceInt}.`;
+                return false;
+            }
+
+            purchases.push({ name, price: priceInt, max: max ?? null });
+            spent += priceInt;
+
+            const li = document.createElement('li');
+                outBuy.textContent = `↩️ Annullato WIN: \"${lastAction.player.name}\". Ripristinato nel pool.`;
+                if (!confirm('Reset? Ripristina pool e azzera acquisti.')) return;
+                pool = DEFAULT_POOL.map(p => ({ name: p.name, max: p.max }));
+
+            if (lastAction.type === 'loss') {
+                // Restore redistributed targets
+                if (Array.isArray(lastAction.redistributedTargets)) {
+                    for (const t of lastAction.redistributedTargets) {
+                        const p = pool.find(x => norm(x.name) === norm(t.name));
+                }
+                $('#outCheck').textContent = '✅ Reset completato.';
+                saveState();
+                // Restore lost player
+        // --- Event handlers ---
+        $('#btnLoad').addEventListener('click', () => {
+            const { players, errors } = parsePlayers($('#listInput').value);
+            const out = $('#outLoad');
+
+            if (errors.length) {
+                out.textContent = `❌ Errori nella lista:\n${errors.join('\n')}`;
+                return;
+            }
+            pool = players;
+            purchases = [];
+            spent = 0;
+            actions = [];
+            renderPurchases();
+            resetAuctionUI();
+            updateCounters();
+            saveState();
+            out.textContent = `✅ Caricati ${players.length} giocatori. (Stato acquisti azzerato)`;
+        });
+
+        $('#btnAppend').addEventListener('click', () => {
+            const { players, errors } = parsePlayers($('#listInput').value);
+            const out = $('#outLoad');
+
+            if (errors.length) {
+                out.textContent = `❌ Errori nella lista:\n${errors.join('\n')}`;
+                return;
+            }
+
+            // Merge by normalized name (keep highest max)
+            const map = new Map(pool.map(p => [norm(p.name), p]));
+            for (const p of players) {
+                const k = norm(p.name);
+                const existing = map.get(k);
+                if (!existing || p.max > existing.max) map.set(k, p);
+            }
+            pool = [...map.values()];
+            resetAuctionUI();
+            updateCounters();
+            saveState();
+            out.textContent = `✅ Aggiunti/aggiornati ${players.length} giocatori. Pool totale: ${pool.length}.`;
+        });
+
+        $('#btnResetAll').addEventListener('click', () => {
+            if (!confirm('Reset totale? Cancella pool, acquisti e stato salvato.')) return;
+            pool = [];
+            purchases = [];
+            spent = 0;
+            actions = [];
+            resetAuctionUI();
+            renderPurchases();
+            updateCounters();
+            try { localStorage.removeItem(STORAGE_KEY); } catch { }
+            $('#outLoad').textContent = '✅ Reset completato.';
+            $('#outBuy').textContent = '';
+            $('#outCheck').textContent = '';
+        });
+
+        $('#btnCheck').addEventListener('click', () => {
+            const q = $('#q').value;
+            const out = $('#outCheck');
+            const matches = findCandidates(q);
+
+            if (matches.length === 0) {
+                out.textContent = `❌ "${q}" non è nel pool.`;
+                resetAuctionUI();
+                return;
+            }
+            if (matches.length > 1) {
+                out.textContent = `⚠️ Trovati più match:\n- ${matches.map(m => m.name).join('\n- ')}`;
+                resetAuctionUI();
+                return;
+            }
+
+            out.textContent = `✅ Trovato: ${matches[0].name} (max ${matches[0].max})`;
+            setCurrentPlayer(matches[0]);
+        });
+
+        $('#btnRandom').addEventListener('click', () => {
+            const out = $('#outCheck');
+            if (!pool.length) {
+                out.textContent = '❌ Pool vuoto.';
+                resetAuctionUI();
+                return;
+            }
+            const p = pool[Math.floor(Math.random() * pool.length)];
+            out.textContent = `🎯 Estratto: ${p.name} (max ${p.max})`;
+            setCurrentPlayer(p);
+        });
+
+        $('#btnNextCall').addEventListener('click', () => {
+            const out = $('#outCheck');
+            const p = nextCallCandidate();
+            if (!p) {
+                out.textContent = '❌ Pool vuoto.';
+                resetAuctionUI();
+                return;
+            }
+            out.textContent = `➡️ Prossimo: ${p.name} (max ${p.max})`;
+            setCurrentPlayer(p);
+        });
+
+        $('#btnClear').addEventListener('click', () => {
+            $('#q').value = '';
+            $('#outCheck').textContent = '';
+            resetAuctionUI();
+            $('#q').focus();
+        });
+
+        $('#btnSuggest').addEventListener('click', () => {
+            const out = $('#outAuction');
+            const res = suggestBid();
+            out.textContent = res.ok ? `💰 ${res.message}` : `⚠️ ${res.message}`;
+        });
+
+        $('#btnWon').addEventListener('click', () => {
+            const out = $('#outAuction');
+            if (!current) return;
+
+            const res = suggestBid();
+            if (!res.ok) {
+                out.textContent = `⚠️ ${res.message}`;
+                return;
+            }
+
+            const playerSnapshot = { name: current.name, max: current.max };
+            const removed = removeFromPool(current.name);
+            const purchaseIndex = purchases.length;
+            const li = addPurchase(current.name, res.bid, current.max);
+
+            if (!li) {
+                // purchase failed -> restore if we removed
+                if (removed) pool.push(playerSnapshot);
+                updateCounters();
+                saveState();
+                out.textContent = '❌ Impossibile registrare acquisto (controlla budget).';
+                return;
+            }
+
+            actions.push({ type: 'win', player: playerSnapshot, purchaseIndex });
+            saveState();
+
+            out.textContent = `🎉 Vinto: ${current.name} a ${res.bid}.`;
+            resetAuctionUI();
+        });
+
+        $('#btnWonManual').addEventListener('click', () => {
+            const out = $('#outAuction');
+            if (!current) return;
+
+            const price = toInt($('#manualWin').value);
+            if (price == null || price < 0) {
+                out.textContent = '❌ Prezzo manuale non valido.';
+                return;
+            }
+
+            const playerSnapshot = { name: current.name, max: current.max };
+            const removed = removeFromPool(current.name);
+            const purchaseIndex = purchases.length;
+            const li = addPurchase(current.name, price, current.max);
+
+            if (!li) {
+                if (removed) pool.push(current);
+                updateCounters();
+                saveState();
+                out.textContent = '❌ Impossibile registrare acquisto (controlla budget).';
+                return;
+            }
+
+            actions.push({ type: 'win', player: playerSnapshot, purchaseIndex });
+            saveState();
+
+            if (price > current.max) {
+                out.textContent = `⚠️ Vinto a ${price}, ma supera il tuo max (${current.max}).`;
+            } else {
+                out.textContent = `🎉 Vinto: ${current.name} a ${price}.`;
+            }
+            resetAuctionUI();
+        });
+
+        $('#btnLost').addEventListener('click', () => {
+            const out = $('#outAuction');
+            if (!current) return;
+
+            const playerSnapshot = { name: current.name, max: current.max };
+            const removed = removeFromPool(current.name);
+
+            // Redistribute the unused max across the next 3 highest-valued players
+            const redistribution = redistributeOnLoss(playerSnapshot.max, 3);
+
+            if (removed) {
+                actions.push({
+                    type: 'loss',
+                    player: playerSnapshot,
+                    redistributedTargets: redistribution.targets
+                });
+                updateCounters();
+                saveState();
+
+                if (redistribution.targets.length) {
+                    const summary = redistribution.targets
+                        .map(t => `${t.name}: ${t.oldMax}→${t.newMax}`)
+                        .join(' | ');
+                    out.textContent = `😞 Perso: ${playerSnapshot.name}. Rimosso dal pool. Redistribuiti ${redistribution.distributed} crediti sui prossimi 3: ${summary}`;
+                } else {
+                    out.textContent = `😞 Perso: ${playerSnapshot.name}. Rimosso dal pool.`;
+                }
+            } else {
+                out.textContent = `😞 Perso: ${playerSnapshot.name}.`;
+            }
+            resetAuctionUI();
+        });
+
+        $('#btnUndo').addEventListener('click', undoLast);
+        $('#btnExportCSV').addEventListener('click', exportCSV);
+
+        // Initial render
+        (function init() {
+            const restored = loadState();
+            if (!restored) {
+                budget = DEFAULT_BUDGET;
+                pool = DEFAULT_POOL.map(p => ({ name: p.name, max: p.max }));
+                purchases = [];
+                actions = [];
+                spent = 0;
+                renderPurchases();
+                updateCounters();
+                saveState();
+            }
+        })();
+        */
+    -->
+</body>
+
+</html>
