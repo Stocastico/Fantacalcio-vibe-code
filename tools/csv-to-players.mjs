@@ -9,6 +9,8 @@
  * Opzioni:
  *   --target players|market   quale file scrivere (default: players)
  *   --budget N               forza il budget invece di riusare quello già nel file
+ *   --roster N               quanti giocatori deve avere la rosa a fine asta
+ *                            (solo --target players; default: quello già nel file, o 25)
  *   --dry-run                stampa a schermo senza scrivere niente
  *
  * Intestazioni riconosciute (maiuscole e accenti indifferenti):
@@ -37,6 +39,10 @@ const TARGETS = {
         globalName: 'playersData',
         groupByRole: true,
         title: "Lista giocatori per l'asta principale",
+        // Quanti giocatori devi avere a fine asta. Non è la lunghezza della lista:
+        // puoi desiderarne meno e riempire il resto con acquisti fuori lista.
+        rosterConst: 'ROSTER_SIZE',
+        rosterDefault: 25,
     },
     market: {
         file: 'assets/js/data/market-pool.js',
@@ -170,11 +176,20 @@ function renderList(players, target) {
     return lines.join('\n');
 }
 
-function renderFile(players, budget, target) {
+function renderFile(players, budget, target, rosterSize) {
     const total = players.reduce((a, p) => a + p.max, 0);
     const quadra = total === budget
         ? `La somma dei massimali fa ${total}, esattamente il budget.`
         : `⚠️ La somma dei massimali fa ${total} ma il budget è ${budget}: l'app lo segnala con un banner.`;
+
+    const roster = target.rosterConst
+        ? `    const ${target.rosterConst} = ${rosterSize};\n`
+        : '';
+    const rosterDoc = target.rosterConst
+        ? `\n * ${target.rosterConst} è quanti giocatori devi avere a fine asta: serve a tenere da\n` +
+          ` * parte 1 credito per ogni slot ancora vuoto. Non deve coincidere con la lunghezza\n` +
+          ` * della lista — gli slot che avanzano li riempi con acquisti fuori lista.\n`
+        : '';
 
     return `/**
  * ${target.title} — stagione 2026/27.
@@ -193,19 +208,19 @@ function renderFile(players, budget, target) {
  *   max   il TUO tetto di spesa per quel giocatore, non il prezzo di listino
  *
  * ${quadra}
- *
+ *${rosterDoc} *
  * Nota: la lista non è offuscata e questo repository è pubblico.
  */
 ;(function (global) {
     'use strict';
 
     const ${target.budgetConst} = ${budget};
-
+${roster}
     const ${target.listConst} = [
 ${renderList(players, target)}
     ];
 
-    const api = { ${target.budgetConst}, ${target.listConst} };
+    const api = { ${target.budgetConst}, ${target.rosterConst ? `${target.rosterConst}, ` : ''}${target.listConst} };
 
     global.FC = global.FC || {};
     global.FC.${target.globalName} = api;
@@ -214,11 +229,12 @@ ${renderList(players, target)}
 `;
 }
 
-/** Riusa il budget già presente nel file, così un import non lo resetta di nascosto. */
-async function currentBudget(target) {
+/** Rilegge una costante dal file già esistente, così un import non la resetta di nascosto. */
+async function currentConst(target, name) {
+    if (!name) return null;
     try {
         const src = await readFile(resolve(root, target.file), 'utf8');
-        const m = src.match(new RegExp(`${target.budgetConst}\\s*=\\s*(\\d+)`));
+        const m = src.match(new RegExp(`${name}\\s*=\\s*(\\d+)`));
         return m ? Number(m[1]) : null;
     } catch {
         return null;
@@ -284,10 +300,19 @@ if (!players.length) {
 }
 
 const total = players.reduce((a, p) => a + p.max, 0);
-const budget = Number(options.budget) || (await currentBudget(target)) || total;
-const output = renderFile(players, budget, target);
+const budget = Number(options.budget) || (await currentConst(target, target.budgetConst)) || total;
+const rosterSize = Number(options.roster)
+    || (await currentConst(target, target.rosterConst))
+    || target.rosterDefault;
+const output = renderFile(players, budget, target, rosterSize);
 
 console.log(`📋 ${players.length} giocatori, somma massimali ${total}, budget ${budget}.`);
+if (target.rosterConst && players.length !== rosterSize) {
+    const diff = rosterSize - players.length;
+    console.log(diff > 0
+        ? `   Rosa da ${rosterSize}: ${diff} slot li riempirai fuori lista.`
+        : `   Rosa da ${rosterSize}: hai ${-diff} desiderati in più di quanti slot ci sono.`);
+}
 for (const role of ROLE_ORDER) {
     const group = players.filter(p => p.role === role);
     if (group.length) console.log(`   ${role}: ${group.length} giocatori, ${group.reduce((a, p) => a + p.max, 0)} crediti`);

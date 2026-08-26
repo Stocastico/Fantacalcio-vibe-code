@@ -6,7 +6,7 @@
     'use strict';
 
     const { engine: engineApi, credits, text } = global.FC;
-    const { PLAYERS, AUCTION_BUDGET } = global.FC.playersData;
+    const { PLAYERS, AUCTION_BUDGET, ROSTER_SIZE } = global.FC.playersData;
 
     const $ = (id) => document.getElementById(id);
 
@@ -17,9 +17,10 @@
         storageKey: 'fantacalcio:asta:2026-2027',
         storageVersion: 1,
         easterEgg: true,
-        // Di default la rosa da riempire è lunga quanto la lista: modificabile
-        // dalle impostazioni se la tua lista è più larga della rosa.
-        rosterSize: PLAYERS.length,
+        // Quanti giocatori devi avere a fine asta: sta in players.js perché è un
+        // dato della tua lega, non della lista. Non è la lunghezza della lista —
+        // gli slot che avanzano li riempi con acquisti fuori lista.
+        rosterSize: ROSTER_SIZE || PLAYERS.length,
     });
 
     /** Giocatore attualmente in asta e ultimo rilancio consigliato per lui. */
@@ -101,10 +102,19 @@
             label.textContent = describePlayer(p);
             const price = document.createElement('strong');
             price.textContent = String(p.price);
-            if (p.max !== null && p.max !== undefined && p.price > p.max) {
+
+            if (p.offList) {
+                // Non era fra i desiderati: si vede, ma senza allarmi rossi.
+                const tag = document.createElement('span');
+                tag.className = 'tag-off';
+                tag.textContent = 'fuori lista';
+                tag.title = 'Non era nella lista dei giocatori desiderati';
+                label.appendChild(tag);
+            } else if (p.max !== null && p.max !== undefined && p.price > p.max) {
                 price.classList.add('over');
                 price.title = `Sopra il tuo tetto di ${p.max}`;
             }
+
             li.append(label, price);
             list.appendChild(li);
         }
@@ -252,19 +262,30 @@
         setTimeout(() => li.classList.remove('flash-add'), 1600);
     }
 
-    // --- eventi -------------------------------------------------------------
+    // --- ricerca ------------------------------------------------------------
 
     function search() {
         const out = $('outCheck');
-        const q = $('q').value;
+        const q = ($('q').value || '').trim();
         const matches = engine.candidates(q);
 
         if (!matches.length) {
             closeAuction();
-            const already = engine.bought(q);
-            say(out, already
-                ? `ℹ️ "${already.name}" l'hai già preso per ${already.price}.`
-                : `❌ "${q}" non è (più) nella tua lista.`, already ? 'warn' : 'error');
+
+            // Già in rosa? Cercalo anche fra gli acquisti, non solo per nome esatto.
+            const presi = text.findCandidates(q, engine.purchases);
+            if (presi.length === 1) {
+                say(out, `ℹ️ "${presi[0].name}" l'hai già preso per ${presi[0].price}.`, 'warn');
+                return;
+            }
+            if (presi.length > 1) {
+                say(out, `ℹ️ Hai già preso: ${presi.map(p => `${p.name} (${p.price})`).join(', ')}.`, 'warn');
+                return;
+            }
+
+            // Non è fra i desiderati: se lo vuoi comunque, il modulo è già pronto.
+            $('offListName').value = q;
+            say(out, `❌ "${q}" non è fra i tuoi giocatori desiderati. Se lo prendi lo stesso, registralo in "Ho preso uno fuori lista" qui sotto.`, 'error');
             return;
         }
         if (matches.length > 1) {
@@ -275,6 +296,73 @@
         say(out, `✅ Trovato: ${describePlayer(matches[0])}`, 'ok');
         openAuction(matches[0]);
     }
+
+    // --- acquisto fuori lista -----------------------------------------------
+
+    function clearOffListForm() {
+        $('offListName').value = '';
+        $('offListRole').value = '';
+        $('offListTeam').value = '';
+        $('offListPrice').value = '';
+    }
+
+    /**
+     * Registra un giocatore che nella lista dei desiderati non c'è.
+     *
+     * Prima di aggiungerlo controlla che non sia un desiderato scritto a metà:
+     * un nome parziale che assomiglia a qualcuno in lista è quasi sempre un
+     * errore di battitura, e comprarlo dall'asta normale è meglio perché lì il
+     * suo tetto viene usato davvero.
+     */
+    function buyOffList() {
+        const out = $('outOffList');
+        const name = ($('offListName').value || '').trim();
+        if (!name) { say(out, '❌ Scrivi il nome del giocatore.', 'error'); return; }
+
+        const esatto = engine.find(name);
+        if (esatto) {
+            say(out, `ℹ️ "${esatto.name}" è fra i tuoi desiderati, tetto ${esatto.max}: cercalo qui sopra e compralo dall'asta normale, così il tetto viene usato.`, 'warn');
+            return;
+        }
+
+        const simili = engine.candidates(name);
+        if (simili.length && !confirm(
+            `"${name}" assomiglia a giocatori che hai in lista:\n\n- ${simili.map(p => p.name).join('\n- ')}\n\n` +
+            'Se è uno di loro annulla e compralo dall\'asta normale.\n' +
+            `Lo aggiungo comunque come fuori lista?`)) {
+            say(out, 'Annullato: cercalo nella lista qui sopra.', 'warn');
+            return;
+        }
+
+        const res = engine.winOffList(name, $('offListPrice').value, {
+            role: $('offListRole').value,
+            team: $('offListTeam').value,
+        });
+        if (!res.ok) { say(out, `❌ ${res.message}`, 'error'); return; }
+
+        const parts = [`⚠️ "${res.player.name}" non è fra i tuoi giocatori desiderati: l'ho aggiunto lo stesso alla rosa per ${res.price}.`];
+        if (res.redistribution.changes.length) {
+            parts.push(`Quei crediti li ho tolti a chi resta in lista — ${credits.describe(res.redistribution)}.`);
+        }
+        if (res.unabsorbed < 0) {
+            parts.push(engine.pool.length
+                ? `⚠️ ${-res.unabsorbed} crediti non recuperabili: gli altri in lista sono già tutti a 1.`
+                : `⚠️ In lista non è rimasto nessuno: questi ${res.price} crediti sono tutti fuori piano.`);
+        }
+
+        say(out, parts.join(' '), 'warn');
+        say($('outBuy'), `➕ ${describePlayer(res.player)} aggiunto per ${res.price} (fuori lista).`, 'warn');
+        clearOffListForm();
+        render();
+        flashLastPurchase();
+    }
+
+    $('btnOffListBuy').addEventListener('click', buyOffList);
+    $('offListPrice').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); buyOffList(); }
+    });
+
+    // --- eventi della ricerca e dell'asta -----------------------------------
 
     $('btnCheck').addEventListener('click', search);
     $('q').addEventListener('keydown', (e) => {
@@ -331,10 +419,15 @@
     $('btnUndo').addEventListener('click', () => {
         const res = engine.undo();
         if (!res.ok) { say($('outBuy'), `⚠️ ${res.message}`, 'warn'); return; }
+        const p = res.action.player;
         const label = res.action.type === 'win'
-            ? `acquisto di ${res.action.player.name} per ${res.action.price}`
-            : `"andato ad altri" di ${res.action.player.name}`;
-        say($('outBuy'), `↩️ Annullato: ${label}. Rimesso in lista con tetto ${res.action.player.max}.`, 'ok');
+            ? `acquisto di ${p.name} per ${res.action.price}`
+            : `"andato ad altri" di ${p.name}`;
+        // Un fuori lista in lista non ci torna: non c'era.
+        const coda = p.offList
+            ? 'Non era fra i desiderati, quindi è solo uscito dalla rosa e i crediti sono tornati agli altri.'
+            : `Rimesso in lista con tetto ${p.max}.`;
+        say($('outBuy'), `↩️ Annullato: ${label}. ${coda}`, 'ok');
         closeAuction();
         render();
     });

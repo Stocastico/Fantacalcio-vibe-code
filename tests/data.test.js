@@ -54,6 +54,16 @@ test('players.js: la somma dei massimali fa esattamente il budget', () => {
     assert.equal(somma, AUCTION_BUDGET, `somma ${somma}, budget ${AUCTION_BUDGET}`);
 });
 
+// La riserva di 1 credito per slot vuoto si calcola da qui: se ROSTER_SIZE
+// mancasse o fosse più piccolo della rosa vera, l'app ti lascerebbe spendere
+// crediti che poi ti servono per completarla.
+test('players.js: la rosa da completare è dichiarata e sensata', () => {
+    const { PLAYERS, ROSTER_SIZE } = require('../assets/js/data/players.js');
+    assert.ok(Number.isInteger(ROSTER_SIZE) && ROSTER_SIZE > 0, `ROSTER_SIZE = ${ROSTER_SIZE}`);
+    assert.equal(ROSTER_SIZE, 25, 'la rosa del fantacalcio è di 25 giocatori');
+    assert.ok(PLAYERS.length <= ROSTER_SIZE, 'più desiderati che slot: qualcuno resterà fuori');
+});
+
 test('players.js: la lista 2026/27 ha la composizione attesa', () => {
     const { PLAYERS } = require('../assets/js/data/players.js');
     const perRuolo = PLAYERS.reduce((m, p) => (m[p.role] = (m[p.role] || 0) + 1, m), {});

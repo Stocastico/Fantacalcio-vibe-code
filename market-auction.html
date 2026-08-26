@@ -69,6 +69,33 @@
                     <ul id="offersList" class="list compact"></ul>
                     <div id="outOffers" class="out" aria-live="polite"></div>
                 </section>
+
+                <section class="card" id="offListSection">
+                    <h3>Preso uno fuori lista</h3>
+                    <p class="muted">
+                        Un giocatore che nel pool non c'è. Lo registro lo stesso: i crediti
+                        che paghi vengono tolti ai massimali di chi resta.
+                    </p>
+
+                    <label for="offListName">Nome del giocatore</label>
+                    <input id="offListName" type="text" placeholder="es. Pellegrini" autocomplete="off" />
+
+                    <div class="row">
+                        <div style="flex:1; min-width:140px;">
+                            <label for="offListTeam">Squadra (facoltativa)</label>
+                            <input id="offListTeam" type="text" placeholder="es. Roma" autocomplete="off" />
+                        </div>
+                        <div style="flex:1; min-width:140px;">
+                            <label for="offListPrice">Prezzo pagato</label>
+                            <input id="offListPrice" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 12" />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <button id="btnOffListBuy" class="secondary">➕ Aggiungi agli acquisti</button>
+                    </div>
+                    <div id="outOffList" class="out" aria-live="polite"></div>
+                </section>
             </div>
 
             <section class="card" style="margin-top:20px;">

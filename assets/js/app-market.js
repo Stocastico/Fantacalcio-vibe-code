@@ -69,6 +69,12 @@
             const li = document.createElement('li');
             const label = document.createElement('span');
             label.textContent = describePlayer(p);
+            if (p.offList) {
+                const tag = document.createElement('span');
+                tag.className = 'tag-off';
+                tag.textContent = 'fuori lista';
+                label.appendChild(tag);
+            }
             const price = document.createElement('strong');
             price.textContent = String(p.price);
             li.append(label, price);
@@ -183,6 +189,49 @@
         render();
     });
 
+    // --- acquisto fuori lista -----------------------------------------------
+
+    /**
+     * Come nell'asta principale, ma senza il ruolo (qui il pool non ne ha) e
+     * senza mai nominare un massimale nei messaggi.
+     */
+    $('btnOffListBuy').addEventListener('click', () => {
+        const out = $('outOffList');
+        const name = ($('offListName').value || '').trim();
+        if (!name) { say(out, '❌ Scrivi il nome del giocatore.', 'error'); return; }
+
+        if (engine.find(name)) {
+            say(out, `ℹ️ "${name}" è già nel tuo pool: chiamalo dall'asta normale.`, 'warn');
+            return;
+        }
+
+        const simili = engine.candidates(name);
+        if (simili.length && !confirm(
+            `"${name}" assomiglia a giocatori che hai nel pool:\n\n- ${simili.map(p => p.name).join('\n- ')}\n\n` +
+            'Lo aggiungo comunque come fuori lista?')) {
+            say(out, 'Annullato.', 'warn');
+            return;
+        }
+
+        const res = engine.winOffList(name, $('offListPrice').value, { team: $('offListTeam').value });
+        if (!res.ok) { say(out, `❌ ${res.message}`, 'error'); return; }
+
+        const parts = [`⚠️ "${res.player.name}" non è fra i giocatori che volevi: aggiunto lo stesso per ${res.price}.`];
+        if (res.redistribution.changes.length) parts.push('Quei crediti sono stati tolti a chi resta nel pool.');
+        if (res.unabsorbed < 0) parts.push('⚠️ Il pool non può assorbire tutta la spesa: stai andando fuori piano.');
+
+        say(out, parts.join(' '), 'warn');
+        say($('outBuy'), `➕ ${describePlayer(res.player)} aggiunto per ${res.price} (fuori lista).`, 'warn');
+        $('offListName').value = '';
+        $('offListTeam').value = '';
+        $('offListPrice').value = '';
+        render();
+    });
+
+    $('offListPrice').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); $('btnOffListBuy').click(); }
+    });
+
     // --- offerte degli altri ------------------------------------------------
 
     $('btnAddOffer').addEventListener('click', () => {
@@ -234,10 +283,12 @@
     $('btnUndo').addEventListener('click', () => {
         const res = engine.undo();
         if (!res.ok) { say($('outBuy'), `⚠️ ${res.message}`, 'warn'); return; }
+        const p = res.action.player;
         const label = res.action.type === 'win'
-            ? `acquisto di ${res.action.player.name} per ${res.action.price}`
-            : `"perso" di ${res.action.player.name}`;
-        say($('outBuy'), `↩️ Annullato: ${label}. Rimesso nel pool.`, 'ok');
+            ? `acquisto di ${p.name} per ${res.action.price}`
+            : `"perso" di ${p.name}`;
+        // Chi non era nel pool non ci rientra annullando l'acquisto.
+        say($('outBuy'), `↩️ Annullato: ${label}. ${p.offList ? 'Era un fuori lista: tolto dagli acquisti.' : 'Rimesso nel pool.'}`, 'ok');
         closeAuction();
         render();
     });

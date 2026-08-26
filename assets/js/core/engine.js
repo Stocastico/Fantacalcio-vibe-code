@@ -13,6 +13,9 @@
  * Il `max` è un piano, non un vincolo: in asta lo puoi sforare. Il limite duro è
  * `maxSpendable()`, cioè i crediti rimasti meno quelli da tenere da parte per
  * riuscire comunque a riempire la rosa.
+ *
+ * Anche la lista è un piano: con `winOffList()` puoi registrare un giocatore che
+ * nella lista non c'è mai stato. Costa ai giocatori rimasti, come uno sforamento.
  */
 ;(function (global) {
     'use strict';
@@ -113,7 +116,9 @@
 
         /** Copia dei dati identificativi di un giocatore, senza il riferimento all'oggetto nel pool. */
         function snapshot(p) {
-            return { name: p.name, max: p.max, role: p.role, team: p.team };
+            const copy = { name: p.name, max: p.max, role: p.role, team: p.team };
+            if (p.offList) copy.offList = true;
+            return copy;
         }
 
         function persist() {
@@ -235,28 +240,36 @@
 
         // --- azioni --------------------------------------------------------
 
-        /** Registra un acquisto e ridistribuisce la differenza col tuo massimale. */
-        function win(name, priceRaw) {
-            const player = view.find(name);
-            if (!player) return fail(`"${name}" non è nella lista dei giocatori rimasti.`);
-
+        /**
+         * Il prezzo è utilizzabile? Il tetto della lista si può sforare, il
+         * limite di spesa no: è l'unico controllo che blocca davvero.
+         */
+        function checkPrice(priceRaw) {
             const price = toInt(priceRaw);
-            if (price === null || price < 0) return fail('Prezzo non valido.');
-            if (view.bought(name)) return fail(`"${player.name}" risulta già acquistato.`);
+            if (price === null || price < 0) return { ok: false, message: 'Prezzo non valido.' };
 
-            // Il tetto della lista si può sforare; questo no.
             const cap = view.maxSpendable();
             if (price > cap) {
                 const reserve = view.reserve();
-                return fail(reserve > 0
-                    ? `Puoi spendere al massimo ${cap}: ti restano ${view.left()} crediti e devi tenerne ${reserve} per gli altri ${reserve} giocatori da comprare.`
-                    : `Puoi spendere al massimo ${cap}: è tutto quello che ti resta.`);
+                return {
+                    ok: false,
+                    message: reserve > 0
+                        ? `Puoi spendere al massimo ${cap}: ti restano ${view.left()} crediti e devi tenerne ${reserve} per gli altri ${reserve} giocatori da comprare.`
+                        : `Puoi spendere al massimo ${cap}: è tutto quello che ti resta.`,
+                };
             }
+            return { ok: true, price };
+        }
 
-            const taken = snapshot(player);
-            removeFromPool(player.name);
-
+        /**
+         * Parte comune ai due tipi di acquisto: scala i crediti, ridistribuisce
+         * la differenza col tetto e registra l'azione per l'undo.
+         * `taken` è già una copia fuori dal pool quando arriva qui.
+         */
+        function record(taken, price) {
             // Positivo se l'hai preso sotto il tuo tetto, negativo se hai sforato.
+            // Per un fuori lista il tetto è zero, quindi il prezzo pieno viene
+            // tolto ai giocatori rimasti: quei crediti non erano previsti per lui.
             const leftover = taken.max - price;
             const redistribution = credits.redistribute(pool, leftover, cfg.redistribution);
 
@@ -269,10 +282,63 @@
                 ok: true,
                 player: taken,
                 price,
-                over: price > taken.max,
+                offList: !!taken.offList,
+                over: !taken.offList && price > taken.max,
                 redistribution,
                 unabsorbed: redistribution.requested - redistribution.distributed,
             };
+        }
+
+        /** Registra un acquisto e ridistribuisce la differenza col tuo massimale. */
+        function win(name, priceRaw) {
+            const player = view.find(name);
+            if (!player) return fail(`"${name}" non è nella lista dei giocatori rimasti.`);
+            if (view.bought(name)) return fail(`"${player.name}" risulta già acquistato.`);
+
+            const checked = checkPrice(priceRaw);
+            if (!checked.ok) return fail(checked.message);
+
+            const taken = snapshot(player);
+            removeFromPool(player.name);
+            return record(taken, checked.price);
+        }
+
+        /**
+         * Acquisto di un giocatore che nella lista dei desiderati non c'è.
+         *
+         * Serve quando sei in asta di persona: capita l'occasione, oppure alla
+         * fine devi solo riempire uno slot di rosa. Riempie uno slot come un
+         * acquisto normale, e siccome per lui non avevi messo da parte niente,
+         * il prezzo lo pagano i giocatori ancora in lista — è la stessa regola
+         * dello sforamento, applicata a un tetto di zero.
+         *
+         * `details` è opzionale: { role, team }.
+         */
+        function winOffList(nameRaw, priceRaw, details) {
+            const name = String(nameRaw ?? '').trim();
+            if (!name) return fail('Serve il nome del giocatore.');
+
+            const inList = view.find(name);
+            if (inList) {
+                return fail(`"${inList.name}" è nella tua lista: compralo dall'asta normale, così vale il suo tetto di ${inList.max}.`);
+            }
+            const already = view.bought(name);
+            if (already) return fail(`"${already.name}" risulta già acquistato per ${already.price}.`);
+
+            const checked = checkPrice(priceRaw);
+            if (!checked.ok) return fail(checked.message);
+
+            const d = details || {};
+            const role = String(d.role ?? d.ruolo ?? '').toUpperCase();
+            const team = String(d.team ?? d.squadra ?? '').trim();
+
+            return record({
+                name,
+                max: 0,     // per lui non avevi previsto un credito
+                role: VALID_ROLES.includes(role) ? role : undefined,
+                team: team || undefined,
+                offList: true,
+            }, checked.price);
         }
 
         /** Il giocatore è andato a un altro: fuori dalla lista, crediti agli altri. */
@@ -314,7 +380,8 @@
                 }
             }
 
-            if (!view.find(last.player.name)) {
+            // Un fuori lista in lista non c'era: annullarlo non deve infilarcelo.
+            if (!last.player.offList && !view.find(last.player.name)) {
                 pool.push(snapshot(last.player));
             }
 
@@ -384,7 +451,12 @@
             const restoredPool = normalizePlayers(s.pool).players;
             const restoredPurchases = Array.isArray(s.purchases)
                 ? s.purchases.filter(p => p && p.name && toInt(p.price) !== null)
-                    .map(p => ({ name: String(p.name), price: toInt(p.price), max: toInt(p.max), role: p.role, team: p.team }))
+                    // Stessa forma degli acquisti in memoria: `offList` c'è solo se è vero.
+                    .map(p => Object.assign(
+                        { name: String(p.name), max: toInt(p.max), role: p.role, team: p.team },
+                        p.offList ? { offList: true } : null,
+                        { price: toInt(p.price) },
+                    ))
                 : [];
 
             budget = toInt(s.budget) ?? budget;
@@ -411,7 +483,15 @@
             if (purchases.some(p => p.team)) columns.push({ head: 'Squadra', of: p => p.team || '' });
             columns.push({ head: 'Prezzo', of: p => String(p.price), isTotal: true });
             if (!cfg.hideMaxInCsv) {
-                columns.push({ head: 'Tuo massimale', of: p => (p.max === null || p.max === undefined ? '' : String(p.max)) });
+                // Per un fuori lista un massimale non esiste: meglio vuoto che uno zero
+                // che sembra un tetto vero.
+                columns.push({
+                    head: 'Tuo massimale',
+                    of: p => (p.offList || p.max === null || p.max === undefined ? '' : String(p.max)),
+                });
+            }
+            if (purchases.some(p => p.offList)) {
+                columns.push({ head: 'Fuori lista', of: p => (p.offList ? 'sì' : '') });
             }
 
             const rows = [columns.map(c => c.head)];
@@ -443,6 +523,7 @@
             config: cfg,
             bidAdvice,
             win,
+            winOffList,
             lose,
             undo,
             reset,

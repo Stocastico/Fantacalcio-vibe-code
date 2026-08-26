@@ -96,6 +96,25 @@ test('per il mercato genera l altro file, senza ruoli e ordinato per massimale',
     assert.ok(!corpo.includes('role:'), 'senza ruoli non aggiunge la colonna');
 });
 
+// La rosa da completare non si deduce dalla lista: puoi desiderare 20 giocatori
+// e doverne comunque avere 25. Un import non deve perdere questo dato.
+test('la lista d asta dichiara quanti giocatori deve avere la rosa', () => {
+    const { out } = importa(CSV, ['--budget', '100']);
+    assert.match(out, /const ROSTER_SIZE = 25;/, 'di default la rosa del fantacalcio');
+    assert.match(out, /const api = \{ AUCTION_BUDGET, ROSTER_SIZE, PLAYERS \};/);
+});
+
+test('--roster cambia la rosa e il tool dice quanti slot restano fuori lista', () => {
+    const { out } = importa(CSV, ['--budget', '100', '--roster', '30']);
+    assert.match(out, /const ROSTER_SIZE = 30;/);
+    assert.match(out, /27 slot li riempirai fuori lista/);
+});
+
+test('il mercato di riparazione non ha una rosa da completare', () => {
+    const { out } = importa('Nome,Max\nTizio,5\n', ['--target', 'market', '--budget', '5']);
+    assert.ok(!out.includes('ROSTER_SIZE'), 'lì gli slot non c\'entrano');
+});
+
 test('un target inesistente non fa danni', () => {
     const { code, err } = importa(CSV, ['--target', 'inventato']);
     assert.equal(code, 1);

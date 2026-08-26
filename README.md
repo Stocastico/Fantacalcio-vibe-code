@@ -28,6 +28,10 @@ Ogni riga è `{ name, role, team, max }`, dove **`max` è il tuo tetto di spesa*
 prezzo di listino. La somma dei `max` dovrebbe fare il budget; se non torna, la pagina
 lo scrive in un banner.
 
+`ROSTER_SIZE` nello stesso file è quanti giocatori devi avere a fine asta (25). Non
+deve coincidere con la lunghezza della lista: gli slot che avanzano li riempi con
+gli acquisti fuori lista. Si cambia con `--roster N` o a mano.
+
 ## Quanto puoi spendere
 
 Il `max` della lista è un piano: **in asta lo puoi sforare**. Il limite vero è la
@@ -47,6 +51,18 @@ rosa si imposta nella pagina (0 = nessuna riserva).
 Due pillole simili ma diverse: **In lista** sono i giocatori rimasti nella wishlist,
 **Da comprare** sono gli slot di rosa ancora vuoti — cala solo quando compri.
 
+## Prendere uno fuori lista
+
+Se sei all'asta di persona capita l'occasione non pianificata, o alla fine restano
+slot da riempire e desiderati non ne hai più. Il riquadro *Ho preso uno fuori lista*
+lo registra lo stesso, dicendoti che non era fra i giocatori desiderati.
+
+Vale come uno slot di rosa riempito, e siccome per lui non avevi messo da parte
+niente **il prezzo lo pagano i tetti di chi resta in lista**: è la stessa regola dello
+sforamento, su un tetto di zero. Se cerchi un nome che nella lista non c'è, la pagina
+te lo scrive e ti precompila il modulo. Annullarlo lo toglie dalla rosa senza
+infilarlo fra i desiderati: lì non c'era.
+
 ## Ridistribuzione dei crediti
 
 Il budget è un totale chiuso: `somma dei tetti rimasti + speso = budget`.
@@ -54,6 +70,7 @@ Il budget è un totale chiuso: `somma dei tetti rimasti + speso = budget`.
 - Preso sotto il tuo tetto → la differenza va agli altri.
 - Andato a un avversario → tutto il suo tetto va agli altri.
 - Pagato sopra il tuo tetto → lo sforamento viene tolto agli altri, mai sotto 1 credito.
+- Preso uno fuori lista → il prezzo pieno viene tolto agli altri.
 
 Se l'invariante si rompe, la pagina lo dice in un banner invece di fartelo scoprire a
 fine asta.
