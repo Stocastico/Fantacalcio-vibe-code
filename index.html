@@ -118,6 +118,37 @@
                 </section>
             </div>
 
+            <section class="card" id="shortlistsSection" style="margin-top:20px;">
+                <h3>Liste di supporto</h3>
+                <p class="muted">
+                    Due promemoria che stanno chiusi finché non ti servono: qui non ci sono
+                    tetti e non si compra niente, solo nome, ruolo e squadra. Con la ✕ togli
+                    chi è già stato chiamato, così resta davanti solo chi è ancora libero.
+                </p>
+
+                <div class="row">
+                    <button id="btnToggleAlternatives" class="secondary" aria-expanded="false"
+                        aria-controls="wrapAlternatives"
+                        title="I ripieghi, se un desiderato te lo portano via">Alternative</button>
+                    <button id="btnToggleBaits" class="secondary" aria-expanded="false"
+                        aria-controls="wrapBaits"
+                        title="I pezzi grossi da buttare sul tavolo per far bruciare crediti agli altri">Da chiamare all'inizio</button>
+                    <button id="btnRestoreShortlists" class="secondary"
+                        title="Rimette nelle due liste tutti i giocatori che hai tolto">Ripristina liste</button>
+                </div>
+
+                <div id="wrapAlternatives" class="shortlist-wrap" hidden>
+                    <p class="shortlist-title">Alternative <span class="muted">— su chi ripiego</span></p>
+                    <ul id="listAlternatives" class="list compact shortlist"></ul>
+                </div>
+
+                <div id="wrapBaits" class="shortlist-wrap" hidden>
+                    <p class="shortlist-title">Da chiamare all'inizio <span class="muted">— li chiamo io, ma non li voglio</span></p>
+                    <ul id="listBaits" class="list compact shortlist"></ul>
+                </div>
+                <div id="outShortlists" class="out" aria-live="polite"></div>
+            </section>
+
             <section class="card" style="margin-top:20px;">
                 <h3>Lista e impostazioni</h3>
 
@@ -185,7 +216,9 @@
     <script src="assets/js/core/csv.js"></script>
     <script src="assets/js/core/storage.js"></script>
     <script src="assets/js/core/engine.js"></script>
+    <script src="assets/js/core/shortlists.js"></script>
     <script src="assets/js/data/players.js"></script>
+    <script src="assets/js/data/shortlists.js"></script>
     <script src="assets/js/app-auction.js"></script>
 </body>
 

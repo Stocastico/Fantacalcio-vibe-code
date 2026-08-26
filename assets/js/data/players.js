@@ -1,10 +1,12 @@
 /**
  * Lista giocatori per l'asta principale — stagione 2026/27.
  *
- * Generato da tools/csv-to-players.mjs, ma è un normale file JavaScript:
- * puoi anche modificarlo a mano. Per rigenerarlo da un CSV:
+ * ⚠️  FILE GENERATO da tools/csv-to-lists.mjs, a partire da liste/lista.csv.
+ * Modificalo pure a mano se hai fretta — è normale JavaScript — ma al prossimo
+ * import quello che scrivi qui viene sovrascritto da liste/lista.csv.
  *
- *   npm run import -- lista.csv
+ *   npm run import                 # da liste/lista.csv
+ *   npm run build                  # rigenera i file portabili
  *
  * Formato di ogni riga:
  *   { name: "Cognome", role: "P" | "D" | "C" | "A", team: "Squadra", max: <crediti> }
