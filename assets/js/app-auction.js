@@ -5,8 +5,9 @@
 ;(function (global) {
     'use strict';
 
-    const { engine: engineApi, credits, text } = global.FC;
+    const { engine: engineApi, credits, text, shortlists: shortlistsApi } = global.FC;
     const { PLAYERS, AUCTION_BUDGET, ROSTER_SIZE } = global.FC.playersData;
+    const { ALTERNATIVES, BAITS } = global.FC.shortlistsData;
 
     const $ = (id) => document.getElementById(id);
 
@@ -22,6 +23,23 @@
         // gli slot che avanzano li riempi con acquisti fuori lista.
         rosterSize: ROSTER_SIZE || PLAYERS.length,
     });
+
+    /**
+     * Le due liste di supporto. Non passano dal motore: non hanno massimali, non
+     * spostano crediti e non finiscono in rosa — sono solo promemoria da tenere
+     * davanti in asta. L'unico stato è chi hai già tolto, e viaggia dentro
+     * engine.extra così si salva e si azzera insieme a tutto il resto.
+     */
+    const shortlists = shortlistsApi.createShortlists([
+        { id: 'alternatives', label: 'Alternative', players: ALTERNATIVES },
+        { id: 'baits', label: "Da chiamare all'inizio", players: BAITS },
+    ]);
+
+    /** id della lista → gli elementi della pagina che la mostrano. */
+    const SHORTLIST_UI = {
+        alternatives: { wrap: 'wrapAlternatives', list: 'listAlternatives', button: 'btnToggleAlternatives' },
+        baits: { wrap: 'wrapBaits', list: 'listBaits', button: 'btnToggleBaits' },
+    };
 
     /** Giocatore attualmente in asta e ultimo rilancio consigliato per lui. */
     let current = null;
@@ -68,6 +86,7 @@
 
         renderPurchases();
         renderRemaining();
+        renderShortlists();
         renderBanner();
     }
 
@@ -362,6 +381,97 @@
         if (e.key === 'Enter') { e.preventDefault(); buyOffList(); }
     });
 
+    // --- liste di supporto ---------------------------------------------------
+
+    /** "Zaccagni (C, Lazio)" — qui il massimale non c'è proprio. */
+    function describeEntry(p) {
+        const details = [p.role, p.team].filter(Boolean).join(', ');
+        return details ? `${p.name} (${details})` : p.name;
+    }
+
+    function renderShortlists() {
+        for (const id of shortlists.ids()) renderShortlist(id);
+    }
+
+    /**
+     * Disegna una lista e aggiorna il suo bottone. Il conteggio sta nel bottone
+     * apposta: mentre la lista è chiusa è l'unica cosa che ti dice se là dentro
+     * è rimasto ancora qualcuno.
+     */
+    function renderShortlist(id) {
+        const ui = SHORTLIST_UI[id];
+        if (!ui) return;
+        const wrap = $(ui.wrap);
+        const list = $(ui.list);
+        const button = $(ui.button);
+        const items = shortlists.items(id);
+
+        button.textContent = `${wrap.hidden ? '▾' : '▴'} ${shortlists.label(id)} (${items.length})`;
+        button.setAttribute('aria-expanded', String(!wrap.hidden));
+
+        list.textContent = '';
+        if (!items.length) {
+            const li = document.createElement('li');
+            li.className = 'empty';
+            li.textContent = shortlists.size(id)
+                ? 'Li hai tolti tutti: usa "Ripristina liste" per rimetterli.'
+                : 'Lista vuota: scrivila in assets/js/data/shortlists.js.';
+            list.appendChild(li);
+            return;
+        }
+
+        for (const p of items) {
+            const li = document.createElement('li');
+            const label = document.createElement('span');
+            label.textContent = describeEntry(p);
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'remove';
+            remove.textContent = '✕';
+            remove.title = `Togli ${p.name}: è già stato chiamato`;
+            remove.setAttribute('aria-label', `Togli ${p.name} da ${shortlists.label(id)}`);
+            remove.addEventListener('click', () => removeFromShortlist(id, p.name));
+
+            li.append(label, remove);
+            list.appendChild(li);
+        }
+    }
+
+    /** Le rimozioni stanno in engine.extra: si salvano da sole, si azzerano col reset. */
+    function saveShortlists() {
+        engine.extra.shortlists = shortlists.toState();
+        engine.persist();
+    }
+
+    function removeFromShortlist(id, name) {
+        const res = shortlists.remove(id, name);
+        if (!res.ok) { say($('outShortlists'), `⚠️ ${res.message}`, 'warn'); return; }
+        saveShortlists();
+        renderShortlist(id);
+        say($('outShortlists'), `✕ ${res.entry.name} tolto da "${shortlists.label(id)}".`, 'ok');
+    }
+
+    function toggleShortlist(id) {
+        const wrap = $(SHORTLIST_UI[id].wrap);
+        wrap.hidden = !wrap.hidden;
+        renderShortlist(id);
+        if (!wrap.hidden) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    $('btnToggleAlternatives').addEventListener('click', () => toggleShortlist('alternatives'));
+    $('btnToggleBaits').addEventListener('click', () => toggleShortlist('baits'));
+
+    $('btnRestoreShortlists').addEventListener('click', () => {
+        const res = shortlists.restoreAll();
+        if (!res.count) { say($('outShortlists'), 'Non avevi tolto nessuno.', 'warn'); return; }
+        saveShortlists();
+        renderShortlists();
+        say($('outShortlists'), res.count === 1
+            ? '↩️ Rimesso 1 giocatore nelle due liste.'
+            : `↩️ Rimessi ${res.count} giocatori nelle due liste.`, 'ok');
+    });
+
     // --- eventi della ricerca e dell'asta -----------------------------------
 
     $('btnCheck').addEventListener('click', search);
@@ -408,10 +518,13 @@
     $('btnReset').addEventListener('click', () => {
         if (!confirm('Reset totale: ripristina la lista di partenza e cancella tutti gli acquisti. Procedo?')) return;
         engine.reset();
+        // engine.reset() svuota extra: le liste di supporto tornano intere insieme al resto.
+        shortlists.restoreAll();
         closeAuction();
         say($('outBuy'), '');
         say($('outCheck'), '');
         say($('outRandom'), '');
+        say($('outShortlists'), '');
         say($('outSettings'), '✅ Reset completato.', 'ok');
         render();
     });
@@ -454,6 +567,7 @@
     // --- avvio --------------------------------------------------------------
 
     const restored = engine.restore();
+    shortlists.fromState(engine.extra.shortlists);
     render();
 
     if (restored && (engine.purchases.length || engine.actions.length)) {

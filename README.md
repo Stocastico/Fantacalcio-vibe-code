@@ -63,6 +63,24 @@ sforamento, su un tetto di zero. Se cerchi un nome che nella lista non c'è, la 
 te lo scrive e ti precompila il modulo. Annullarlo lo toglie dalla rosa senza
 infilarlo fra i desiderati: lì non c'era.
 
+## Le due liste di supporto
+
+Sotto la pagina d'asta ci sono due bottoni che aprono e chiudono altrettante liste,
+in [`assets/js/data/shortlists.js`](assets/js/data/shortlists.js):
+
+- **Alternative** — su chi ripiego se un desiderato me lo portano via.
+- **Da chiamare all'inizio** — le esche: i pezzi grossi che butti sul tavolo per far
+  bruciare crediti agli altri mentre i tuoi desiderati sono ancora lì.
+
+Sono promemoria, non liste d'asta: solo nome, ruolo e squadra, niente tetti, e non
+toccano crediti né rosa. La ✕ accanto a ogni nome lo toglie quando è già stato
+chiamato; le rimozioni si salvano nel browser insieme al resto. *Ripristina liste* le
+rimette intere senza toccare l'asta, e anche il *Reset totale* le riporta come stanno
+nel file.
+
+I nomi che ci trovi sono un esempio: sostituiscili a mano, è un normale file
+JavaScript (l'import da CSV riguarda solo `players.js`).
+
 ## Ridistribuzione dei crediti
 
 Il budget è un totale chiuso: `somma dei tetti rimasti + speso = budget`.

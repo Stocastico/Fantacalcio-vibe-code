@@ -451,6 +451,49 @@
             color: var(--danger);
         }
 
+        /* --- liste di supporto (alternative ed esche) ------------------------------ */
+
+        /* Aperte tutte e due di fila, senza un titolo sopra sembrerebbero una lista sola. */
+        .shortlist-title {
+            margin: 16px 0 0;
+            font-weight: 700;
+            color: var(--heading);
+        }
+
+        .shortlist-title .muted {
+            font-weight: 500;
+        }
+
+        /* Sono promemoria, non la wishlist: più basse di riga e senza numeri a destra. */
+        ul.list.shortlist {
+            margin-top: 8px;
+            max-height: 300px;
+        }
+
+        ul.list.shortlist li {
+            align-items: center;
+            padding: 8px 10px 8px 14px;
+        }
+
+        /* La ✕ per togliere chi è già stato chiamato: discreta finché non ci passi sopra. */
+        ul.list.shortlist button.remove {
+            flex: none;
+            padding: 2px 9px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.5;
+            box-shadow: none;
+        }
+
+        ul.list.shortlist button.remove:hover {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: #fff;
+        }
+
         /* Marca gli acquisti che non erano nella lista dei desiderati. */
         .tag-off {
             display: inline-block;
@@ -613,6 +656,37 @@
                     <div id="outOffList" class="out" aria-live="polite"></div>
                 </section>
             </div>
+
+            <section class="card" id="shortlistsSection" style="margin-top:20px;">
+                <h3>Liste di supporto</h3>
+                <p class="muted">
+                    Due promemoria che stanno chiusi finché non ti servono: qui non ci sono
+                    tetti e non si compra niente, solo nome, ruolo e squadra. Con la ✕ togli
+                    chi è già stato chiamato, così resta davanti solo chi è ancora libero.
+                </p>
+
+                <div class="row">
+                    <button id="btnToggleAlternatives" class="secondary" aria-expanded="false"
+                        aria-controls="wrapAlternatives"
+                        title="I ripieghi, se un desiderato te lo portano via">Alternative</button>
+                    <button id="btnToggleBaits" class="secondary" aria-expanded="false"
+                        aria-controls="wrapBaits"
+                        title="I pezzi grossi da buttare sul tavolo per far bruciare crediti agli altri">Da chiamare all'inizio</button>
+                    <button id="btnRestoreShortlists" class="secondary"
+                        title="Rimette nelle due liste tutti i giocatori che hai tolto">Ripristina liste</button>
+                </div>
+
+                <div id="wrapAlternatives" class="shortlist-wrap" hidden>
+                    <p class="shortlist-title">Alternative <span class="muted">— su chi ripiego</span></p>
+                    <ul id="listAlternatives" class="list compact shortlist"></ul>
+                </div>
+
+                <div id="wrapBaits" class="shortlist-wrap" hidden>
+                    <p class="shortlist-title">Da chiamare all'inizio <span class="muted">— li chiamo io, ma non li voglio</span></p>
+                    <ul id="listBaits" class="list compact shortlist"></ul>
+                </div>
+                <div id="outShortlists" class="out" aria-live="polite"></div>
+            </section>
 
             <section class="card" style="margin-top:20px;">
                 <h3>Lista e impostazioni</h3>
@@ -1569,6 +1643,170 @@
     </script>
     <script>
         /**
+         * Le due liste di supporto: alternative e giocatori da chiamare all'inizio.
+         *
+         * Non sono liste d'asta: qui non ci sono massimali e non si compra niente.
+         * Servono solo a ricordarti dei nomi mentre sei al tavolo, e l'unica cosa che
+         * ci fai è togliere chi è già stato chiamato da qualcun altro.
+         *
+         * Come tutto quello che sta in core/, non tocca il DOM: la pagina ci mette
+         * sopra i bottoni, i test la usano direttamente da node.
+         */
+        ;(function (global) {
+            'use strict';
+
+            const isNode = typeof module !== 'undefined' && !!module.exports;
+            const text = isNode ? require('./text.js') : global.FC.text;
+            const engine = isNode ? require('./engine.js') : global.FC.engine;
+
+            const { norm } = text;
+            const { VALID_ROLES } = engine;
+
+            /**
+             * Porta una lista nella forma { name, role?, team? }, scartando le righe
+             * inutilizzabili e i doppioni. Il massimale, se c'è, viene ignorato: in
+             * queste liste non serve e mostrarlo confonderebbe con la wishlist vera.
+             */
+            function normalizeEntries(list) {
+                const entries = [];
+                const problems = [];
+                const seen = new Set();
+
+                if (!Array.isArray(list)) return { entries, problems: ['La lista non è un array.'] };
+
+                list.forEach((raw, i) => {
+                    const label = `riga ${i + 1}`;
+                    if (!raw || typeof raw !== 'object') { problems.push(`${label}: non è un oggetto.`); return; }
+
+                    const name = String(raw.name ?? '').trim();
+                    if (!name) { problems.push(`${label}: nome mancante.`); return; }
+
+                    const key = norm(name);
+                    if (seen.has(key)) { problems.push(`${label} (${name}): duplicato, tengo il primo.`); return; }
+                    seen.add(key);
+
+                    const role = String(raw.role ?? raw.ruolo ?? '').toUpperCase();
+                    const team = String(raw.team ?? raw.squadra ?? '').trim();
+                    entries.push({
+                        name,
+                        role: VALID_ROLES.includes(role) ? role : undefined,
+                        team: team || undefined,
+                    });
+                });
+
+                return { entries, problems };
+            }
+
+            /**
+             * @param {Array} defs  [{ id, label, players }] — l'ordine dei giocatori è
+             *                      quello del file: è una lista curata, non la si riordina.
+             */
+            function createShortlists(defs) {
+                const lists = new Map();
+                const problems = [];
+
+                for (const def of Array.isArray(defs) ? defs : []) {
+                    const id = String(def && def.id || '').trim();
+                    if (!id || lists.has(id)) continue;
+                    const { entries, problems: bad } = normalizeEntries(def.players);
+                    problems.push(...bad.map(p => `${id}: ${p}`));
+                    lists.set(id, {
+                        id,
+                        label: String(def.label || id),
+                        all: entries,
+                        removed: new Set(),
+                    });
+                }
+
+                function get(id) { return lists.get(String(id)); }
+
+                function fail(message) { return { ok: false, message }; }
+
+                const api = {
+                    problems,
+
+                    /** Gli id nell'ordine in cui sono stati definiti. */
+                    ids() { return [...lists.keys()]; },
+
+                    label(id) { const l = get(id); return l ? l.label : ''; },
+
+                    /** Quanti giocatori aveva la lista di partenza. */
+                    size(id) { const l = get(id); return l ? l.all.length : 0; },
+
+                    /** I giocatori ancora da chiamare, nell'ordine del file. */
+                    items(id) {
+                        const l = get(id);
+                        if (!l) return [];
+                        return l.all.filter(p => !l.removed.has(norm(p.name)));
+                    },
+
+                    removedCount(id) { const l = get(id); return l ? l.removed.size : 0; },
+
+                    /** Toglie un giocatore: è già stato chiamato, non serve più averlo davanti. */
+                    remove(id, name) {
+                        const l = get(id);
+                        if (!l) return fail(`Lista "${id}" inesistente.`);
+                        const key = norm(name);
+                        const entry = l.all.find(p => norm(p.name) === key);
+                        if (!entry) return fail(`"${name}" non è in ${l.label}.`);
+                        if (l.removed.has(key)) return fail(`"${entry.name}" l'avevi già tolto.`);
+                        l.removed.add(key);
+                        return { ok: true, entry };
+                    },
+
+                    /** Rimette tutti quelli tolti da una lista. */
+                    restore(id) {
+                        const l = get(id);
+                        if (!l) return fail(`Lista "${id}" inesistente.`);
+                        const count = l.removed.size;
+                        l.removed.clear();
+                        return { ok: true, count };
+                    },
+
+                    restoreAll() {
+                        let count = 0;
+                        for (const l of lists.values()) { count += l.removed.size; l.removed.clear(); }
+                        return { ok: true, count };
+                    },
+
+                    /**
+                     * Solo i nomi tolti, pronti da infilare in engine.extra: la lista di
+                     * partenza sta nel file dati e non ha senso duplicarla nel salvataggio.
+                     */
+                    toState() {
+                        const state = {};
+                        for (const l of lists.values()) state[l.id] = [...l.removed];
+                        return state;
+                    },
+
+                    /** Ricarica le rimozioni salvate, ignorando quello che non riconosce. */
+                    fromState(state) {
+                        if (!state || typeof state !== 'object') return false;
+                        for (const l of lists.values()) {
+                            l.removed.clear();
+                            const saved = state[l.id];
+                            if (!Array.isArray(saved)) continue;
+                            for (const name of saved) {
+                                const key = norm(name);
+                                if (l.all.some(p => norm(p.name) === key)) l.removed.add(key);
+                            }
+                        }
+                        return true;
+                    },
+                };
+
+                return api;
+            }
+
+            const api = { createShortlists, normalizeEntries };
+
+            global.FC = global.FC || {};
+            global.FC.shortlists = api;
+            if (typeof module !== 'undefined' && module.exports) module.exports = api;
+        })(typeof globalThis !== 'undefined' ? globalThis : this);
+    </script>
+    <script>
+        /**
          * Lista giocatori per l'asta principale — stagione 2026/27.
          *
          * Generato da tools/csv-to-players.mjs, ma è un normale file JavaScript:
@@ -1642,14 +1880,79 @@
     </script>
     <script>
         /**
+         * Le due liste di supporto della pagina d'asta — stagione 2026/27.
+         *
+         * ⚠️  I nomi qui sotto sono un ESEMPIO: sostituiscili con i tuoi.
+         *     È un normale file JavaScript, si modifica a mano (l'import da CSV
+         *     riguarda solo players.js, queste liste no).
+         *
+         * Formato di ogni riga — niente massimali, qui non si compra:
+         *   { name: "Cognome", role: "P" | "D" | "C" | "A", team: "Squadra" }
+         *
+         *   name  come lo chiami tu
+         *   role  P portiere, D difensore, C centrocampista, A attaccante (opzionale)
+         *   team  per riconoscere gli omonimi a colpo d'occhio (opzionale)
+         *
+         * ALTERNATIVES  i ripieghi: se un desiderato di players.js va a un altro, sono
+         *               questi i nomi su cui ripiegare. Tienili nell'ordine in cui li
+         *               vorresti: la pagina non li riordina.
+         *
+         * BAITS         le esche, che nella pagina si chiamano "Da chiamare all'inizio":
+         *               i pezzi grossi che butti sul tavolo per far bruciare crediti
+         *               agli altri mentre i tuoi desiderati sono ancora lì.
+         *
+         * In asta togli con la ✕ chi è già stato chiamato; il "Reset totale" della
+         * pagina rimette tutto com'è scritto qui.
+         */
+        ;(function (global) {
+            'use strict';
+
+            /** Su chi ripiego se il desiderato me lo portano via. */
+            const ALTERNATIVES = [
+                { name: "Carnesecchi",  role: "P", team: "Atalanta"   },
+                { name: "Di Gregorio",  role: "P", team: "Juventus"   },
+                { name: "Bijol",        role: "D", team: "Udinese"    },
+                { name: "Cambiaso",     role: "D", team: "Juventus"   },
+                { name: "Dodo",         role: "D", team: "Fiorentina" },
+                { name: "Frattesi",     role: "C", team: "Inter"      },
+                { name: "Zaccagni",     role: "C", team: "Lazio"      },
+                { name: "Pellegrini",   role: "C", team: "Roma"       },
+                { name: "Cutrone",      role: "A", team: "Como"       },
+                { name: "Piccoli",      role: "A", team: "Cagliari"   },
+            ];
+
+            /** Le esche: li chiamo io per primo, ma non li voglio. */
+            const BAITS = [
+                { name: "Maignan",      role: "P", team: "Milan"      },
+                { name: "Dimarco",      role: "D", team: "Inter"      },
+                { name: "Bastoni",      role: "D", team: "Inter"      },
+                { name: "De Bruyne",    role: "C", team: "Napoli"     },
+                { name: "Pulisic",      role: "C", team: "Milan"      },
+                { name: "Yildiz",       role: "C", team: "Juventus"   },
+                { name: "Lautaro",      role: "A", team: "Inter"      },
+                { name: "Leao",         role: "A", team: "Milan"      },
+                { name: "Lookman",      role: "A", team: "Atalanta"   },
+                { name: "Kean",         role: "A", team: "Fiorentina" },
+            ];
+
+            const api = { ALTERNATIVES, BAITS };
+
+            global.FC = global.FC || {};
+            global.FC.shortlistsData = api;
+            if (typeof module !== 'undefined' && module.exports) module.exports = api;
+        })(typeof globalThis !== 'undefined' ? globalThis : this);
+    </script>
+    <script>
+        /**
          * Helper d'asta principale: collega il motore condiviso alla pagina index.html.
          * Qui dentro c'è solo interfaccia — tutte le regole stanno in core/engine.js.
          */
         ;(function (global) {
             'use strict';
 
-            const { engine: engineApi, credits, text } = global.FC;
+            const { engine: engineApi, credits, text, shortlists: shortlistsApi } = global.FC;
             const { PLAYERS, AUCTION_BUDGET, ROSTER_SIZE } = global.FC.playersData;
+            const { ALTERNATIVES, BAITS } = global.FC.shortlistsData;
 
             const $ = (id) => document.getElementById(id);
 
@@ -1665,6 +1968,23 @@
                 // gli slot che avanzano li riempi con acquisti fuori lista.
                 rosterSize: ROSTER_SIZE || PLAYERS.length,
             });
+
+            /**
+             * Le due liste di supporto. Non passano dal motore: non hanno massimali, non
+             * spostano crediti e non finiscono in rosa — sono solo promemoria da tenere
+             * davanti in asta. L'unico stato è chi hai già tolto, e viaggia dentro
+             * engine.extra così si salva e si azzera insieme a tutto il resto.
+             */
+            const shortlists = shortlistsApi.createShortlists([
+                { id: 'alternatives', label: 'Alternative', players: ALTERNATIVES },
+                { id: 'baits', label: "Da chiamare all'inizio", players: BAITS },
+            ]);
+
+            /** id della lista → gli elementi della pagina che la mostrano. */
+            const SHORTLIST_UI = {
+                alternatives: { wrap: 'wrapAlternatives', list: 'listAlternatives', button: 'btnToggleAlternatives' },
+                baits: { wrap: 'wrapBaits', list: 'listBaits', button: 'btnToggleBaits' },
+            };
 
             /** Giocatore attualmente in asta e ultimo rilancio consigliato per lui. */
             let current = null;
@@ -1711,6 +2031,7 @@
 
                 renderPurchases();
                 renderRemaining();
+                renderShortlists();
                 renderBanner();
             }
 
@@ -2005,6 +2326,97 @@
                 if (e.key === 'Enter') { e.preventDefault(); buyOffList(); }
             });
 
+            // --- liste di supporto ---------------------------------------------------
+
+            /** "Zaccagni (C, Lazio)" — qui il massimale non c'è proprio. */
+            function describeEntry(p) {
+                const details = [p.role, p.team].filter(Boolean).join(', ');
+                return details ? `${p.name} (${details})` : p.name;
+            }
+
+            function renderShortlists() {
+                for (const id of shortlists.ids()) renderShortlist(id);
+            }
+
+            /**
+             * Disegna una lista e aggiorna il suo bottone. Il conteggio sta nel bottone
+             * apposta: mentre la lista è chiusa è l'unica cosa che ti dice se là dentro
+             * è rimasto ancora qualcuno.
+             */
+            function renderShortlist(id) {
+                const ui = SHORTLIST_UI[id];
+                if (!ui) return;
+                const wrap = $(ui.wrap);
+                const list = $(ui.list);
+                const button = $(ui.button);
+                const items = shortlists.items(id);
+
+                button.textContent = `${wrap.hidden ? '▾' : '▴'} ${shortlists.label(id)} (${items.length})`;
+                button.setAttribute('aria-expanded', String(!wrap.hidden));
+
+                list.textContent = '';
+                if (!items.length) {
+                    const li = document.createElement('li');
+                    li.className = 'empty';
+                    li.textContent = shortlists.size(id)
+                        ? 'Li hai tolti tutti: usa "Ripristina liste" per rimetterli.'
+                        : 'Lista vuota: scrivila in assets/js/data/shortlists.js.';
+                    list.appendChild(li);
+                    return;
+                }
+
+                for (const p of items) {
+                    const li = document.createElement('li');
+                    const label = document.createElement('span');
+                    label.textContent = describeEntry(p);
+
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.className = 'remove';
+                    remove.textContent = '✕';
+                    remove.title = `Togli ${p.name}: è già stato chiamato`;
+                    remove.setAttribute('aria-label', `Togli ${p.name} da ${shortlists.label(id)}`);
+                    remove.addEventListener('click', () => removeFromShortlist(id, p.name));
+
+                    li.append(label, remove);
+                    list.appendChild(li);
+                }
+            }
+
+            /** Le rimozioni stanno in engine.extra: si salvano da sole, si azzerano col reset. */
+            function saveShortlists() {
+                engine.extra.shortlists = shortlists.toState();
+                engine.persist();
+            }
+
+            function removeFromShortlist(id, name) {
+                const res = shortlists.remove(id, name);
+                if (!res.ok) { say($('outShortlists'), `⚠️ ${res.message}`, 'warn'); return; }
+                saveShortlists();
+                renderShortlist(id);
+                say($('outShortlists'), `✕ ${res.entry.name} tolto da "${shortlists.label(id)}".`, 'ok');
+            }
+
+            function toggleShortlist(id) {
+                const wrap = $(SHORTLIST_UI[id].wrap);
+                wrap.hidden = !wrap.hidden;
+                renderShortlist(id);
+                if (!wrap.hidden) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            $('btnToggleAlternatives').addEventListener('click', () => toggleShortlist('alternatives'));
+            $('btnToggleBaits').addEventListener('click', () => toggleShortlist('baits'));
+
+            $('btnRestoreShortlists').addEventListener('click', () => {
+                const res = shortlists.restoreAll();
+                if (!res.count) { say($('outShortlists'), 'Non avevi tolto nessuno.', 'warn'); return; }
+                saveShortlists();
+                renderShortlists();
+                say($('outShortlists'), res.count === 1
+                    ? '↩️ Rimesso 1 giocatore nelle due liste.'
+                    : `↩️ Rimessi ${res.count} giocatori nelle due liste.`, 'ok');
+            });
+
             // --- eventi della ricerca e dell'asta -----------------------------------
 
             $('btnCheck').addEventListener('click', search);
@@ -2051,10 +2463,13 @@
             $('btnReset').addEventListener('click', () => {
                 if (!confirm('Reset totale: ripristina la lista di partenza e cancella tutti gli acquisti. Procedo?')) return;
                 engine.reset();
+                // engine.reset() svuota extra: le liste di supporto tornano intere insieme al resto.
+                shortlists.restoreAll();
                 closeAuction();
                 say($('outBuy'), '');
                 say($('outCheck'), '');
                 say($('outRandom'), '');
+                say($('outShortlists'), '');
                 say($('outSettings'), '✅ Reset completato.', 'ok');
                 render();
             });
@@ -2097,6 +2512,7 @@
             // --- avvio --------------------------------------------------------------
 
             const restored = engine.restore();
+            shortlists.fromState(engine.extra.shortlists);
             render();
 
             if (restored && (engine.purchases.length || engine.actions.length)) {
