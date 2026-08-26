@@ -35,7 +35,8 @@ const ALIAS = {
     nome: ['giocatore', 'nome', 'name', 'player'],
     ruolo: ['ruolo', 'role'],
     squadra: ['squadra', 'team', 'club'],
-    max: ['max', 'massimale', 'tetto', 'bid', 'crediti', 'offerta_max', 'offerta max', 'offerta massima', 'budget'],
+    max: ['max', 'massimale', 'tetto', 'bid', 'crediti',
+          'offerta_massima', 'offerta massima', 'offerta_max', 'offerta max', 'budget'],
 };
 
 const RIEPILOGHI = ['totale', 'totali', 'total', 'somma', 'sum'];
@@ -185,4 +186,50 @@ test('i file generati sono aggiornati: rifare l import non cambierebbe niente', 
             `${file} non corrisponde ai CSV: lancia "npm run import".`
         );
     }
+});
+
+// --- la lista di esempio ----------------------------------------------------
+//
+// liste/esempio-inga.csv non entra in nessuna pagina: serve a provare
+// standalone_inga.html senza dover inventare una lista ogni volta, e a far
+// vedere che formato vuole. Deve restare una lista credibile: 3-8-8-6 e 500
+// crediti tondi, altrimenti come esempio non insegna niente.
+
+const ESEMPIO = 'liste/esempio-inga.csv';
+
+test(`${ESEMPIO}: 25 giocatori, 3 portieri, 8 difensori, 8 centrocampisti, 6 attaccanti`, () => {
+    const righe = leggiCSV(ESEMPIO);
+    const perRuolo = (ruolo) => righe.filter(r => r.ruolo === ruolo).length;
+
+    assert.equal(righe.length, 25);
+    assert.deepEqual(
+        { P: perRuolo('P'), D: perRuolo('D'), C: perRuolo('C'), A: perRuolo('A') },
+        { P: 3, D: 8, C: 8, A: 6 }
+    );
+});
+
+test(`${ESEMPIO}: i tetti sommano a 500`, () => {
+    const somma = leggiCSV(ESEMPIO).reduce((a, r) => a + Number(r.max), 0);
+    assert.equal(somma, 500);
+});
+
+test(`${ESEMPIO}: nomi tutti diversi e tetti interi positivi`, () => {
+    const righe = leggiCSV(ESEMPIO);
+    const nomi = righe.map(r => r.nome.toLowerCase());
+    assert.equal(new Set(nomi).size, nomi.length, 'nomi doppi');
+    for (const r of righe) {
+        const max = Number(r.max);
+        assert.ok(Number.isInteger(max) && max >= 1, `${r.nome}: max "${r.max}"`);
+        assert.ok(r.squadra, `${r.nome}: squadra mancante`);
+    }
+});
+
+test(`${ESEMPIO}: la pagina base la accetta così com'è`, () => {
+    const { normalizePlayers } = require('../assets/js/core/engine.js');
+    const csv = require('../assets/js/core/csv.js');
+
+    const { records } = csv.readList(readFileSync(resolve(root, ESEMPIO), 'utf8'), { needMax: true });
+    const { players, problems } = normalizePlayers(records);
+    assert.deepEqual(problems, [], 'righe che la pagina scarterebbe');
+    assert.equal(players.length, 25);
 });

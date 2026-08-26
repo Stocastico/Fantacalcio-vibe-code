@@ -163,6 +163,10 @@ due colonne, `giocatore` e `offerta_massima` (l'intestazione può anche mancare;
 e squadra, se ci sono, vengono usati). Il file nel repo è vuoto apposta — chiunque lo
 apre ci mette la propria lista.
 
+Per provarla c'è [`liste/esempio-inga.csv`](liste/esempio-inga.csv): 25 nomi inventati,
+3-8-8-6, 500 crediti tondi. Non entra in nessuna pagina, serve solo a vedere com'è
+fatto un CSV che va bene.
+
 Poi c'è **⬇️ Scarica la pagina con tutto dentro**: la pagina riscrive una copia di sé
 stessa con la lista e gli acquisti fatti finora incollati nel blocco
 `<script id="datiIniziali">`. Quella copia si manda per mail: chi la riceve la apre col
