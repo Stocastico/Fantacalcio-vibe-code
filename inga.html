@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="it">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Helper d'asta – lista di Inga</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="assets/style.css" />
+</head>
+
+<body>
+    <!--
+        Versione base dell'helper, pensata per chi chiama al posto di qualcun altro
+        e la vede per la prima volta quel giorno. Niente liste di supporto, niente
+        acquisti fuori lista: si carica un CSV, si chiama, si segna chi si prende.
+
+        La lista non sta in un file a parte: si importa da CSV e poi il bottone
+        "Scarica la pagina con tutto dentro" ne riscrive una copia con la lista
+        (e gli acquisti fatti finora) incollati qui sotto. Così il file si passa
+        per mail e chi lo riceve lo apre e trova tutto pronto.
+    -->
+    <script id="datiIniziali" type="application/json">null</script>
+
+    <header class="page-head">
+        <h1>Helper d'asta <span class="season">lista di Inga</span></h1>
+        <p class="muted" id="sottotitolo">
+            Tutto offline: quello che segni resta su questo computer.
+        </p>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <section class="card" id="importSection">
+        <!-- Aperto finché non c'è una lista, poi si richiude da solo: a lista
+             caricata è solo una cosa in mezzo ai piedi. -->
+        <details id="importWrap" open>
+            <summary id="importSummary">1) Carica la lista</summary>
+            <p class="muted">
+                Serve un file CSV con due colonne: <strong>giocatore</strong> e
+                <strong>offerta massima</strong> (il tetto di spesa per quel giocatore).
+                L'intestazione può esserci o non esserci; se il file ha anche ruolo e
+                squadra, tanto meglio.
+            </p>
+            <div class="row">
+                <input id="fileCsv" type="file" accept=".csv,text/csv,text/plain" />
+            </div>
+        </details>
+        <div id="outImport" class="out" aria-live="polite"></div>
+    </section>
+
+    <div id="app" hidden>
+        <div class="row" id="counters">
+            <span class="pill" id="playersLeft">In lista: 0</span>
+            <span class="pill" id="sumNow">Somma tetti: 0</span>
+            <span class="pill" id="budgetLeft">Crediti residui: 0</span>
+            <span class="pill" id="slotsLeft" title="Giocatori che mancano ancora alla rosa: scende solo quando compri">Da comprare: 0</span>
+            <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso, tenendo da parte 1 credito per ogni posto ancora vuoto in rosa">Max spendibile: 0</span>
+        </div>
+
+        <div class="layout" style="margin-top:16px;">
+            <div>
+                <div class="grid">
+                    <section class="card">
+                        <h3>2) Chi stai chiamando</h3>
+                        <p class="muted">Scrivi il nome di chi è in asta adesso, anche solo un pezzo.</p>
+
+                        <label for="q">Nome del giocatore</label>
+                        <input id="q" type="text" placeholder="es. Lautaro, Vlahovic…" autocomplete="off" />
+                        <div class="row">
+                            <button id="btnCheck">Cerca nella lista</button>
+                            <button id="btnClear" class="secondary">Pulisci</button>
+                        </div>
+                        <div id="outCheck" class="out" aria-live="polite"></div>
+
+                        <div class="separator">Oppure</div>
+
+                        <p class="muted">Tocca a te chiamare e non sai chi dire?</p>
+                        <div class="row">
+                            <button id="btnRandom" class="secondary">Estrai un nome a caso</button>
+                            <button id="btnNext" class="secondary" title="Il giocatore col tetto più alto rimasto">Chiama il più caro</button>
+                        </div>
+                        <div id="outRandom" class="out" aria-live="polite"></div>
+                    </section>
+
+                    <section class="card" id="auctionSection" hidden>
+                        <h3>3) 🏷️ Asta in corso</h3>
+                        <div id="playerInfo" class="player-info"></div>
+
+                        <label for="currentOffer">Quanto hanno offerto adesso</label>
+                        <input id="currentOffer" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 25" />
+                        <div class="row">
+                            <button id="btnCalculateBid">Posso rilanciare?</button>
+                        </div>
+                        <div id="outAuction" class="out" aria-live="polite"></div>
+
+                        <label for="finalPrice" style="margin-top:16px;">Prezzo finale pagato</label>
+                        <input id="finalPrice" type="number" inputmode="numeric" min="0" step="1"
+                            placeholder="si compila da solo col rilancio consigliato" />
+                        <div class="row">
+                            <button id="btnPlayerWon">✅ L'ho preso</button>
+                            <button id="btnPlayerLost" class="secondary">😞 L'ha preso un altro</button>
+                            <button id="btnCancelAuction" class="secondary">Chiudi senza fare nulla</button>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="card" style="margin-top:20px;">
+                    <h3>Lista e impostazioni</h3>
+
+                    <div class="row">
+                        <button id="btnShowLeft" class="emergency">⚠️ Mostra la lista che resta</button>
+                        <button id="btnReset" class="secondary" title="Rimette la lista come l'hai caricata e cancella gli acquisti">Ricomincia da capo</button>
+                    </div>
+                    <details id="leftWrap" style="margin-top:12px;" hidden>
+                        <summary>Giocatori ancora in lista</summary>
+                        <ul id="leftList" class="list compact"></ul>
+                    </details>
+
+                    <div class="row" style="margin-top:20px;">
+                        <div style="flex:1; min-width:180px;">
+                            <label for="budgetInput">Crediti totali</label>
+                            <input id="budgetInput" type="number" inputmode="numeric" min="0" step="1" />
+                        </div>
+                        <div style="flex:1; min-width:180px;">
+                            <label for="rosterInput">Giocatori da avere a fine asta</label>
+                            <input id="rosterInput" type="number" inputmode="numeric" min="0" step="1" />
+                        </div>
+                        <button id="btnSetBudget" class="secondary" style="align-self:flex-end;">Applica</button>
+                    </div>
+                    <div id="outSettings" class="out" aria-live="polite"></div>
+                </section>
+            </div>
+
+            <aside class="sidebar">
+                <section class="card">
+                    <h3>Rosa acquistata</h3>
+                    <p class="muted">Chi hai preso e a quanto.</p>
+
+                    <ul id="purchasesList" class="list"></ul>
+
+                    <div class="row">
+                        <span class="pill" id="spentPill">Speso: 0</span>
+                        <span class="pill" id="leftPill">Residuo: 0</span>
+                    </div>
+
+                    <div class="row">
+                        <button id="btnUndo" class="secondary">↩️ Annulla ultima azione</button>
+                        <button id="btnExportCSV" class="secondary">📦 Esporta CSV</button>
+                    </div>
+
+                    <div id="outBuy" class="out" aria-live="polite"></div>
+                </section>
+
+                <section class="card" style="margin-top:20px;">
+                    <h3>Passa il file a qualcun altro</h3>
+                    <p class="muted">
+                        Scarica una copia di questa pagina con dentro la lista e gli acquisti
+                        fatti finora. Chi la riceve la apre col doppio click e riparte da qui,
+                        senza dover ricaricare niente.
+                    </p>
+                    <div class="row">
+                        <button id="btnSavePage">⬇️ Scarica la pagina con tutto dentro</button>
+                    </div>
+                    <div id="outSave" class="out" aria-live="polite"></div>
+                </section>
+            </aside>
+        </div>
+    </div>
+
+    <script src="assets/js/core/text.js"></script>
+    <script src="assets/js/core/credits.js"></script>
+    <script src="assets/js/core/csv.js"></script>
+    <script src="assets/js/core/storage.js"></script>
+    <script src="assets/js/core/engine.js"></script>
+    <script src="assets/js/app-inga.js"></script>
+</body>
+
+</html>

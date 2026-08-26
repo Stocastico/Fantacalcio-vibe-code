@@ -8,7 +8,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Fantacalcio 2026/27 – Helper d'Asta</title>
+    <title>Helper d'asta – lista di Inga</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         /*
@@ -548,202 +548,163 @@
 </head>
 
 <body>
+    <!--
+        Versione base dell'helper, pensata per chi chiama al posto di qualcun altro
+        e la vede per la prima volta quel giorno. Niente liste di supporto, niente
+        acquisti fuori lista: si carica un CSV, si chiama, si segna chi si prende.
+
+        La lista non sta in un file a parte: si importa da CSV e poi il bottone
+        "Scarica la pagina con tutto dentro" ne riscrive una copia con la lista
+        (e gli acquisti fatti finora) incollati qui sotto. Così il file si passa
+        per mail e chi lo riceve lo apre e trova tutto pronto.
+    -->
+    <script id="datiIniziali" type="application/json">null</script>
+
     <header class="page-head">
-        <h1>Helper d'Asta <span class="season">2026/27</span></h1>
-        <p class="muted">
-            Lista in chiaro, tutto offline, stato salvato nel browser.
-            <a href="market-auction-standalone.html">Vai al mercato di riparazione →</a>
+        <h1>Helper d'asta <span class="season">lista di Inga</span></h1>
+        <p class="muted" id="sottotitolo">
+            Tutto offline: quello che segni resta su questo computer.
         </p>
     </header>
 
     <div id="banner" class="banner" hidden></div>
 
-    <div class="row" id="counters">
-        <span class="pill" id="countP">P: 0</span>
-        <span class="pill" id="countD">D: 0</span>
-        <span class="pill" id="countC">C: 0</span>
-        <span class="pill" id="countA">A: 0</span>
-        <span class="pill" id="sumNow">Somma tetti: 0</span>
-        <span class="pill" id="budgetLeft">Crediti residui: 0</span>
-        <span class="pill" id="playersLeft">In lista: 0</span>
-        <span class="pill" id="slotsLeft" title="Slot di rosa ancora da riempire: scendono solo quando compri, non quando un giocatore va a un altro">Da comprare: 0</span>
-        <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso per un giocatore, tenendo da parte 1 credito per ogni slot di rosa ancora vuoto">Max spendibile: 0</span>
-    </div>
+    <section class="card" id="importSection">
+        <!-- Aperto finché non c'è una lista, poi si richiude da solo: a lista
+             caricata è solo una cosa in mezzo ai piedi. -->
+        <details id="importWrap" open>
+            <summary id="importSummary">1) Carica la lista</summary>
+            <p class="muted">
+                Serve un file CSV con due colonne: <strong>giocatore</strong> e
+                <strong>offerta massima</strong> (il tetto di spesa per quel giocatore).
+                L'intestazione può esserci o non esserci; se il file ha anche ruolo e
+                squadra, tanto meglio.
+            </p>
+            <div class="row">
+                <input id="fileCsv" type="file" accept=".csv,text/csv,text/plain" />
+            </div>
+        </details>
+        <div id="outImport" class="out" aria-live="polite"></div>
+    </section>
 
-    <div class="layout" style="margin-top:16px;">
-        <div>
-            <div class="grid">
-                <section class="card">
-                    <h3>1) Scegli chi chiamare</h3>
+    <div id="app" hidden>
+        <div class="row" id="counters">
+            <span class="pill" id="playersLeft">In lista: 0</span>
+            <span class="pill" id="sumNow">Somma tetti: 0</span>
+            <span class="pill" id="budgetLeft">Crediti residui: 0</span>
+            <span class="pill" id="slotsLeft" title="Giocatori che mancano ancora alla rosa: scende solo quando compri">Da comprare: 0</span>
+            <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso, tenendo da parte 1 credito per ogni posto ancora vuoto in rosa">Max spendibile: 0</span>
+        </div>
 
-                    <p class="muted">Estrai un giocatore a caso dalla tua lista e apri l'asta partendo da 1 credito.</p>
-                    <div class="row">
-                        <button id="btnRandom">Estrai e inizia asta</button>
-                        <button id="btnNext" class="secondary" title="Chiama il giocatore col tetto più alto rimasto">Chiama il più caro</button>
-                    </div>
-                    <div id="outRandom" class="out" aria-live="polite"></div>
+        <div class="layout" style="margin-top:16px;">
+            <div>
+                <div class="grid">
+                    <section class="card">
+                        <h3>2) Chi stai chiamando</h3>
+                        <p class="muted">Scrivi il nome di chi è in asta adesso, anche solo un pezzo.</p>
 
-                    <div class="separator">Oppure</div>
-
-                    <label for="q">Cerca per nome</label>
-                    <input id="q" type="text" placeholder="es. Lautaro, Vlahovic, Zaccagni…" autocomplete="off" />
-                    <div class="row">
-                        <button id="btnCheck">Cerca nella mia lista</button>
-                        <button id="btnClear" class="secondary">Pulisci</button>
-                    </div>
-                    <div id="outCheck" class="out" aria-live="polite"></div>
-                    <p class="muted">Se il nome è parziale o ambiguo ti mostro i match possibili.</p>
-                </section>
-
-                <section class="card" id="auctionSection" hidden>
-                    <h3>2) 🏷️ Asta in corso</h3>
-                    <div id="playerInfo" class="player-info"></div>
-
-                    <label for="currentOffer">Offerta attuale sul tavolo</label>
-                    <input id="currentOffer" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 25" />
-                    <div class="row">
-                        <button id="btnCalculateBid">Calcola la mia offerta</button>
-                    </div>
-                    <div id="outAuction" class="out" aria-live="polite"></div>
-
-                    <label for="finalPrice" style="margin-top:16px;">Prezzo finale pagato</label>
-                    <input id="finalPrice" type="number" inputmode="numeric" min="0" step="1"
-                        placeholder="si compila da solo col rilancio consigliato" />
-                    <div class="row">
-                        <button id="btnPlayerWon">✅ Preso io</button>
-                        <button id="btnPlayerLost" class="secondary">😞 Andato ad altri</button>
-                        <button id="btnCancelAuction" class="secondary">Chiudi senza fare nulla</button>
-                    </div>
-                </section>
-
-                <section class="card" id="offListSection">
-                    <!-- Senza numero: non è un passo del flusso, è la via d'uscita quando
-                         quello che compri nella lista non c'è. -->
-                    <h3>Ho preso uno fuori lista</h3>
-                    <p class="muted">
-                        Sei in asta e ti scappa l'occasione, o alla fine devi solo riempire uno
-                        slot. Lo registro lo stesso: i crediti che paghi li tolgo dai tetti dei
-                        giocatori che ti restano in lista.
-                    </p>
-
-                    <label for="offListName">Nome del giocatore</label>
-                    <input id="offListName" type="text" placeholder="es. Pellegrini" autocomplete="off" />
-
-                    <div class="row">
-                        <div style="flex:1; min-width:120px;">
-                            <label for="offListRole">Ruolo (facoltativo)</label>
-                            <select id="offListRole">
-                                <option value="">—</option>
-                                <option value="P">P</option>
-                                <option value="D">D</option>
-                                <option value="C">C</option>
-                                <option value="A">A</option>
-                            </select>
+                        <label for="q">Nome del giocatore</label>
+                        <input id="q" type="text" placeholder="es. Lautaro, Vlahovic…" autocomplete="off" />
+                        <div class="row">
+                            <button id="btnCheck">Cerca nella lista</button>
+                            <button id="btnClear" class="secondary">Pulisci</button>
                         </div>
-                        <div style="flex:1; min-width:120px;">
-                            <label for="offListTeam">Squadra (facoltativa)</label>
-                            <input id="offListTeam" type="text" placeholder="es. Roma" autocomplete="off" />
+                        <div id="outCheck" class="out" aria-live="polite"></div>
+
+                        <div class="separator">Oppure</div>
+
+                        <p class="muted">Tocca a te chiamare e non sai chi dire?</p>
+                        <div class="row">
+                            <button id="btnRandom" class="secondary">Estrai un nome a caso</button>
+                            <button id="btnNext" class="secondary" title="Il giocatore col tetto più alto rimasto">Chiama il più caro</button>
                         </div>
-                        <div style="flex:1; min-width:120px;">
-                            <label for="offListPrice">Prezzo pagato</label>
-                            <input id="offListPrice" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 12" />
+                        <div id="outRandom" class="out" aria-live="polite"></div>
+                    </section>
+
+                    <section class="card" id="auctionSection" hidden>
+                        <h3>3) 🏷️ Asta in corso</h3>
+                        <div id="playerInfo" class="player-info"></div>
+
+                        <label for="currentOffer">Quanto hanno offerto adesso</label>
+                        <input id="currentOffer" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 25" />
+                        <div class="row">
+                            <button id="btnCalculateBid">Posso rilanciare?</button>
                         </div>
-                    </div>
+                        <div id="outAuction" class="out" aria-live="polite"></div>
+
+                        <label for="finalPrice" style="margin-top:16px;">Prezzo finale pagato</label>
+                        <input id="finalPrice" type="number" inputmode="numeric" min="0" step="1"
+                            placeholder="si compila da solo col rilancio consigliato" />
+                        <div class="row">
+                            <button id="btnPlayerWon">✅ L'ho preso</button>
+                            <button id="btnPlayerLost" class="secondary">😞 L'ha preso un altro</button>
+                            <button id="btnCancelAuction" class="secondary">Chiudi senza fare nulla</button>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="card" style="margin-top:20px;">
+                    <h3>Lista e impostazioni</h3>
 
                     <div class="row">
-                        <button id="btnOffListBuy" class="secondary">➕ Aggiungi alla rosa</button>
+                        <button id="btnShowLeft" class="emergency">⚠️ Mostra la lista che resta</button>
+                        <button id="btnReset" class="secondary" title="Rimette la lista come l'hai caricata e cancella gli acquisti">Ricomincia da capo</button>
                     </div>
-                    <div id="outOffList" class="out" aria-live="polite"></div>
+                    <details id="leftWrap" style="margin-top:12px;" hidden>
+                        <summary>Giocatori ancora in lista</summary>
+                        <ul id="leftList" class="list compact"></ul>
+                    </details>
+
+                    <div class="row" style="margin-top:20px;">
+                        <div style="flex:1; min-width:180px;">
+                            <label for="budgetInput">Crediti totali</label>
+                            <input id="budgetInput" type="number" inputmode="numeric" min="0" step="1" />
+                        </div>
+                        <div style="flex:1; min-width:180px;">
+                            <label for="rosterInput">Giocatori da avere a fine asta</label>
+                            <input id="rosterInput" type="number" inputmode="numeric" min="0" step="1" />
+                        </div>
+                        <button id="btnSetBudget" class="secondary" style="align-self:flex-end;">Applica</button>
+                    </div>
+                    <div id="outSettings" class="out" aria-live="polite"></div>
                 </section>
             </div>
 
-            <section class="card" id="shortlistsSection" style="margin-top:20px;">
-                <h3>Liste di supporto</h3>
-                <p class="muted">
-                    Due promemoria che stanno chiusi finché non ti servono: qui non ci sono
-                    tetti e non si compra niente, solo nome, ruolo e squadra. Con la ✕ togli
-                    chi è già stato chiamato, così resta davanti solo chi è ancora libero.
-                </p>
+            <aside class="sidebar">
+                <section class="card">
+                    <h3>Rosa acquistata</h3>
+                    <p class="muted">Chi hai preso e a quanto.</p>
 
-                <div class="row">
-                    <button id="btnToggleAlternatives" class="secondary" aria-expanded="false"
-                        aria-controls="wrapAlternatives"
-                        title="I ripieghi, se un desiderato te lo portano via">Alternative</button>
-                    <button id="btnToggleBaits" class="secondary" aria-expanded="false"
-                        aria-controls="wrapBaits"
-                        title="I pezzi grossi da buttare sul tavolo per far bruciare crediti agli altri">Da chiamare all'inizio</button>
-                    <button id="btnRestoreShortlists" class="secondary"
-                        title="Rimette nelle due liste tutti i giocatori che hai tolto">Ripristina liste</button>
-                </div>
+                    <ul id="purchasesList" class="list"></ul>
 
-                <div id="wrapAlternatives" class="shortlist-wrap" hidden>
-                    <p class="shortlist-title">Alternative <span class="muted">— su chi ripiego</span></p>
-                    <ul id="listAlternatives" class="list compact shortlist"></ul>
-                </div>
-
-                <div id="wrapBaits" class="shortlist-wrap" hidden>
-                    <p class="shortlist-title">Da chiamare all'inizio <span class="muted">— li chiamo io, ma non li voglio</span></p>
-                    <ul id="listBaits" class="list compact shortlist"></ul>
-                </div>
-                <div id="outShortlists" class="out" aria-live="polite"></div>
-            </section>
-
-            <section class="card" style="margin-top:20px;">
-                <h3>Lista e impostazioni</h3>
-
-                <div class="row">
-                    <button id="btnShowLeft" class="emergency">⚠️ Mostra lista rimanente</button>
-                    <button id="btnReset" class="secondary" title="Ripristina la lista di partenza e azzera gli acquisti">Reset totale</button>
-                </div>
-                <details id="leftWrap" style="margin-top:12px;" hidden>
-                    <summary>Giocatori ancora in lista</summary>
-                    <ul id="leftList" class="list compact"></ul>
-                </details>
-
-                <div class="row" style="margin-top:20px;">
-                    <div style="flex:1; min-width:180px;">
-                        <label for="budgetInput">Budget totale</label>
-                        <input id="budgetInput" type="number" inputmode="numeric" min="0" step="1" />
+                    <div class="row">
+                        <span class="pill" id="spentPill">Speso: 0</span>
+                        <span class="pill" id="leftPill">Residuo: 0</span>
                     </div>
-                    <div style="flex:1; min-width:180px;">
-                        <label for="rosterInput">Rosa completa (giocatori totali)</label>
-                        <input id="rosterInput" type="number" inputmode="numeric" min="0" step="1" />
+
+                    <div class="row">
+                        <button id="btnUndo" class="secondary">↩️ Annulla ultima azione</button>
+                        <button id="btnExportCSV" class="secondary">📦 Esporta CSV</button>
                     </div>
-                    <button id="btnSetBudget" class="secondary" style="align-self:flex-end;">Applica</button>
-                </div>
-                <p class="muted">
-                    Quanti giocatori devi avere a fine asta: è un totale fisso. Quelli che ti
-                    mancano ancora li vedi nella pillola "Da comprare" in alto, che scende a
-                    ogni acquisto. Serve a tenere da parte 1 credito per ogni slot ancora
-                    vuoto, così non resti senza crediti a rosa incompleta.
-                    Mettilo a 0 per togliere la riserva.
-                </p>
-                <div id="outSettings" class="out" aria-live="polite"></div>
-            </section>
+
+                    <div id="outBuy" class="out" aria-live="polite"></div>
+                </section>
+
+                <section class="card" style="margin-top:20px;">
+                    <h3>Passa il file a qualcun altro</h3>
+                    <p class="muted">
+                        Scarica una copia di questa pagina con dentro la lista e gli acquisti
+                        fatti finora. Chi la riceve la apre col doppio click e riparte da qui,
+                        senza dover ricaricare niente.
+                    </p>
+                    <div class="row">
+                        <button id="btnSavePage">⬇️ Scarica la pagina con tutto dentro</button>
+                    </div>
+                    <div id="outSave" class="out" aria-live="polite"></div>
+                </section>
+            </aside>
         </div>
-
-        <aside class="sidebar">
-            <section class="card">
-                <h3>Rosa acquistata</h3>
-                <p class="muted">Chi hai preso e a quanto.</p>
-
-                <ul id="purchasesList" class="list"></ul>
-
-                <div class="row">
-                    <span class="pill" id="spentPill">Speso: 0</span>
-                    <span class="pill" id="leftPill">Residuo: 0</span>
-                </div>
-
-                <div class="row">
-                    <button id="btnUndo" class="secondary">↩️ Annulla ultima azione</button>
-                    <button id="btnExportCSV" class="secondary">📦 Esporta CSV</button>
-                </div>
-
-                <div id="outBuy" class="out" aria-live="polite"></div>
-            </section>
-        </aside>
     </div>
-
 
     <script>
         /**
@@ -1778,384 +1739,74 @@
     </script>
     <script>
         /**
-         * Le due liste di supporto: alternative e giocatori da chiamare all'inizio.
+         * Versione base dell'helper d'asta, per chi chiama al posto di qualcun altro.
          *
-         * Non sono liste d'asta: qui non ci sono massimali e non si compra niente.
-         * Servono solo a ricordarti dei nomi mentre sei al tavolo, e l'unica cosa che
-         * ci fai è togliere chi è già stato chiamato da qualcun altro.
+         * Due differenze dalla pagina principale, e sono il motivo per cui esiste:
          *
-         * Come tutto quello che sta in core/, non tocca il DOM: la pagina ci mette
-         * sopra i bottoni, i test la usano direttamente da node.
+         *  - la lista non arriva da un file del repo, ma da un CSV caricato a mano;
+         *  - la pagina sa riscriversi. "Scarica la pagina con tutto dentro" produce una
+         *    copia di questo stesso file con la lista e gli acquisti incollati nel
+         *    blocco <script id="datiIniziali">. Quel file si manda per mail: chi lo
+         *    apre riparte da lì senza avere il CSV, senza npm e senza rete.
+         *
+         * Tutto il resto (rilanci, ridistribuzione dei crediti, riserva per la rosa) è
+         * lo stesso motore della pagina principale.
          */
         ;(function (global) {
             'use strict';
 
-            const isNode = typeof module !== 'undefined' && !!module.exports;
-            const text = isNode ? require('./text.js') : global.FC.text;
-            const engine = isNode ? require('./engine.js') : global.FC.engine;
-
-            const { norm } = text;
-            const { VALID_ROLES } = engine;
-
-            /**
-             * Porta una lista nella forma { name, role?, team? }, scartando le righe
-             * inutilizzabili e i doppioni. Il massimale, se c'è, viene ignorato: in
-             * queste liste non serve e mostrarlo confonderebbe con la wishlist vera.
-             */
-            function normalizeEntries(list) {
-                const entries = [];
-                const problems = [];
-                const seen = new Set();
-
-                if (!Array.isArray(list)) return { entries, problems: ['La lista non è un array.'] };
-
-                list.forEach((raw, i) => {
-                    const label = `riga ${i + 1}`;
-                    if (!raw || typeof raw !== 'object') { problems.push(`${label}: non è un oggetto.`); return; }
-
-                    const name = String(raw.name ?? '').trim();
-                    if (!name) { problems.push(`${label}: nome mancante.`); return; }
-
-                    const key = norm(name);
-                    if (seen.has(key)) { problems.push(`${label} (${name}): duplicato, tengo il primo.`); return; }
-                    seen.add(key);
-
-                    const role = String(raw.role ?? raw.ruolo ?? '').toUpperCase();
-                    const team = String(raw.team ?? raw.squadra ?? '').trim();
-                    entries.push({
-                        name,
-                        role: VALID_ROLES.includes(role) ? role : undefined,
-                        team: team || undefined,
-                    });
-                });
-
-                return { entries, problems };
-            }
-
-            /**
-             * @param {Array} defs  [{ id, label, players }] — l'ordine dei giocatori è
-             *                      quello del file: è una lista curata, non la si riordina.
-             */
-            function createShortlists(defs) {
-                const lists = new Map();
-                const problems = [];
-
-                for (const def of Array.isArray(defs) ? defs : []) {
-                    const id = String(def && def.id || '').trim();
-                    if (!id || lists.has(id)) continue;
-                    const { entries, problems: bad } = normalizeEntries(def.players);
-                    problems.push(...bad.map(p => `${id}: ${p}`));
-                    lists.set(id, {
-                        id,
-                        label: String(def.label || id),
-                        all: entries,
-                        removed: new Set(),
-                    });
-                }
-
-                function get(id) { return lists.get(String(id)); }
-
-                function fail(message) { return { ok: false, message }; }
-
-                const api = {
-                    problems,
-
-                    /** Gli id nell'ordine in cui sono stati definiti. */
-                    ids() { return [...lists.keys()]; },
-
-                    label(id) { const l = get(id); return l ? l.label : ''; },
-
-                    /** Quanti giocatori aveva la lista di partenza. */
-                    size(id) { const l = get(id); return l ? l.all.length : 0; },
-
-                    /** I giocatori ancora da chiamare, nell'ordine del file. */
-                    items(id) {
-                        const l = get(id);
-                        if (!l) return [];
-                        return l.all.filter(p => !l.removed.has(norm(p.name)));
-                    },
-
-                    removedCount(id) { const l = get(id); return l ? l.removed.size : 0; },
-
-                    /** Toglie un giocatore: è già stato chiamato, non serve più averlo davanti. */
-                    remove(id, name) {
-                        const l = get(id);
-                        if (!l) return fail(`Lista "${id}" inesistente.`);
-                        const key = norm(name);
-                        const entry = l.all.find(p => norm(p.name) === key);
-                        if (!entry) return fail(`"${name}" non è in ${l.label}.`);
-                        if (l.removed.has(key)) return fail(`"${entry.name}" l'avevi già tolto.`);
-                        l.removed.add(key);
-                        return { ok: true, entry };
-                    },
-
-                    /** Rimette tutti quelli tolti da una lista. */
-                    restore(id) {
-                        const l = get(id);
-                        if (!l) return fail(`Lista "${id}" inesistente.`);
-                        const count = l.removed.size;
-                        l.removed.clear();
-                        return { ok: true, count };
-                    },
-
-                    restoreAll() {
-                        let count = 0;
-                        for (const l of lists.values()) { count += l.removed.size; l.removed.clear(); }
-                        return { ok: true, count };
-                    },
-
-                    /**
-                     * Solo i nomi tolti, pronti da infilare in engine.extra: la lista di
-                     * partenza sta nel file dati e non ha senso duplicarla nel salvataggio.
-                     */
-                    toState() {
-                        const state = {};
-                        for (const l of lists.values()) state[l.id] = [...l.removed];
-                        return state;
-                    },
-
-                    /** Ricarica le rimozioni salvate, ignorando quello che non riconosce. */
-                    fromState(state) {
-                        if (!state || typeof state !== 'object') return false;
-                        for (const l of lists.values()) {
-                            l.removed.clear();
-                            const saved = state[l.id];
-                            if (!Array.isArray(saved)) continue;
-                            for (const name of saved) {
-                                const key = norm(name);
-                                if (l.all.some(p => norm(p.name) === key)) l.removed.add(key);
-                            }
-                        }
-                        return true;
-                    },
-                };
-
-                return api;
-            }
-
-            const api = { createShortlists, normalizeEntries };
-
-            global.FC = global.FC || {};
-            global.FC.shortlists = api;
-            if (typeof module !== 'undefined' && module.exports) module.exports = api;
-        })(typeof globalThis !== 'undefined' ? globalThis : this);
-    </script>
-    <script>
-        /**
-         * Lista giocatori per l'asta principale — stagione 2026/27.
-         *
-         * ⚠️  FILE GENERATO da tools/csv-to-lists.mjs, a partire da liste/lista.csv.
-         * Modificalo pure a mano se hai fretta — è normale JavaScript — ma al prossimo
-         * import quello che scrivi qui viene sovrascritto da liste/lista.csv.
-         *
-         *   npm run import                 # da liste/lista.csv
-         *   npm run build                  # rigenera i file portabili
-         *
-         * Formato di ogni riga:
-         *   { name: "Cognome", role: "P" | "D" | "C" | "A", team: "Squadra", max: <crediti> }
-         *
-         *   name  come lo chiami tu; la ricerca ignora accenti e maiuscole
-         *   role  P portiere, D difensore, C centrocampista, A attaccante (opzionale)
-         *   team  solo per riconoscere gli omonimi a colpo d'occhio (opzionale)
-         *   max   il TUO tetto di spesa per quel giocatore, non il prezzo di listino
-         *
-         * La somma dei massimali fa 500, esattamente il budget.
-         *
-         * ROSTER_SIZE è quanti giocatori devi avere a fine asta: serve a tenere da
-         * parte 1 credito per ogni slot ancora vuoto. Non deve coincidere con la lunghezza
-         * della lista — gli slot che avanzano li riempi con acquisti fuori lista.
-         *
-         * Nota: la lista non è offuscata e questo repository è pubblico.
-         */
-        ;(function (global) {
-            'use strict';
-
-            const AUCTION_BUDGET = 500;
-            const ROSTER_SIZE = 25;
-
-            const PLAYERS = [
-                // Portieri — 3, 37 crediti
-                { name: "Svilar",        role: "P", team: "Roma",     max: 26 },
-                { name: "Falcone",       role: "P", team: "Lecce",    max:  7 },
-                { name: "Caprile",       role: "P", team: "Cagliari", max:  4 },
-
-                // Difensori — 8, 109 crediti
-                { name: "Mancini",       role: "D", team: "Roma",     max: 30 },
-                { name: "Rrahmani",      role: "D", team: "Napoli",   max: 20 },
-                { name: "N'Dicka",       role: "D", team: "Roma",     max: 20 },
-                { name: "Doekhi",        role: "D", team: "Lazio",    max: 12 },
-                { name: "Gila",          role: "D", team: "Milan",    max: 12 },
-                { name: "Tiago Gabriel", role: "D", team: "Lecce",    max:  7 },
-                { name: "Marin",         role: "D", team: "Napoli",   max:  4 },
-                { name: "Troilo",        role: "D", team: "Parma",    max:  4 },
-
-                // Centrocampisti — 8, 175 crediti
-                { name: "Calhanoglu",    role: "C", team: "Inter",    max: 66 },
-                { name: "Orsolini",      role: "C", team: "Bologna",  max: 50 },
-                { name: "Vlasic",        role: "C", team: "Torino",   max: 20 },
-                { name: "Casadei",       role: "C", team: "Torino",   max: 11 },
-                { name: "Ekkelenkamp",   role: "C", team: "Udinese",  max: 11 },
-                { name: "Locatelli",     role: "C", team: "Juventus", max:  8 },
-                { name: "Bernabe",       role: "C", team: "Parma",    max:  6 },
-                { name: "Helgason",      role: "C", team: "Venezia",  max:  3 },
-
-                // Attaccanti — 6, 179 crediti
-                { name: "Hojlund",       role: "A", team: "Napoli",   max: 67 },
-                { name: "Douvikas",      role: "A", team: "Como",     max: 42 },
-                { name: "Raspadori",     role: "A", team: "Atalanta", max: 20 },
-                { name: "Colombo",       role: "A", team: "Genoa",    max: 20 },
-                { name: "Akor Adams",    role: "A", team: "Venezia",  max: 16 },
-                { name: "Berardi",       role: "A", team: "Sassuolo", max: 14 },
-            ];
-
-            const api = { AUCTION_BUDGET, ROSTER_SIZE, PLAYERS };
-
-            global.FC = global.FC || {};
-            global.FC.playersData = api;
-            if (typeof module !== 'undefined' && module.exports) module.exports = api;
-        })(typeof globalThis !== 'undefined' ? globalThis : this);
-    </script>
-    <script>
-        /**
-         * Le due liste di supporto della pagina d'asta — stagione 2026/27.
-         *
-         * ⚠️  FILE GENERATO da tools/csv-to-lists.mjs, a partire da
-         *     liste/alternative.csv e liste/esche.csv.
-         * Quelli sono i file che modifichi tu; qui dentro si può scrivere a mano, ma al
-         * prossimo import viene tutto sovrascritto.
-         *
-         *   npm run import                 # rigenera anche players.js
-         *   npm run build                  # rigenera i file portabili
-         *
-         * Formato di ogni riga — niente massimali, qui non si compra:
-         *   { name: "Cognome", role: "P" | "D" | "C" | "A", team: "Squadra" }
-         *
-         * ALTERNATIVES  i ripieghi: se un desiderato di players.js va a un altro, sono
-         *               questi i nomi su cui ripiegare. L'ordine è quello del CSV.
-         *
-         * BAITS         le esche, che nella pagina si chiamano "Da chiamare all'inizio":
-         *               i pezzi grossi che butti sul tavolo per far bruciare crediti
-         *               agli altri mentre i tuoi desiderati sono ancora lì.
-         *
-         * In asta togli con la ✕ chi è già stato chiamato; il "Reset totale" della
-         * pagina rimette tutto com'è scritto qui.
-         */
-        ;(function (global) {
-            'use strict';
-
-            /** Su chi ripiego se il desiderato me lo portano via. */
-            const ALTERNATIVES = [
-                { name: "Butez",         role: "P", team: "Como"     },
-                { name: "Carnesecchi",   role: "P", team: "Atalanta" },
-                { name: "Pavlovic",      role: "D", team: "Milan"    },
-                { name: "Mina",          role: "D", team: "Cagliari" },
-                { name: "McTominay",     role: "C", team: "Napoli"   },
-                { name: "Perrone",       role: "C", team: "Como"     },
-                { name: "Zielinski",     role: "C", team: "Inter"    },
-                { name: "Goncalo Ramos", role: "A", team: "Milan"    },
-                { name: "Davis",         role: "A", team: "Udinese"  },
-                { name: "Krstovic",      role: "A", team: "Atalanta" },
-            ];
-
-            /** Le esche: li chiamo io per primo, ma non li voglio. */
-            const BAITS = [
-                { name: "Lautaro",  role: "A", team: "Inter"      },
-                { name: "Malen",    role: "A", team: "Roma"       },
-                { name: "Dimarco",  role: "D", team: "Inter"      },
-                { name: "Nico Paz", role: "C", team: "Como"       },
-                { name: "Thuram",   role: "A", team: "Inter"      },
-                { name: "Scamacca", role: "A", team: "Atalanta"   },
-                { name: "Pulisic",  role: "C", team: "Milan"      },
-                { name: "Bremer",   role: "D", team: "Juventus"   },
-                { name: "Kean",     role: "A", team: "Fiorentina" },
-                { name: "Yildiz",   role: "A", team: "Juventus"   },
-            ];
-
-            const api = { ALTERNATIVES, BAITS };
-
-            global.FC = global.FC || {};
-            global.FC.shortlistsData = api;
-            if (typeof module !== 'undefined' && module.exports) module.exports = api;
-        })(typeof globalThis !== 'undefined' ? globalThis : this);
-    </script>
-    <script>
-        /**
-         * Helper d'asta principale: collega il motore condiviso alla pagina index.html.
-         * Qui dentro c'è solo interfaccia — tutte le regole stanno in core/engine.js.
-         */
-        ;(function (global) {
-            'use strict';
-
-            const { engine: engineApi, credits, text, shortlists: shortlistsApi } = global.FC;
-            const { PLAYERS, AUCTION_BUDGET, ROSTER_SIZE } = global.FC.playersData;
-            const { ALTERNATIVES, BAITS } = global.FC.shortlistsData;
+            const { engine: engineApi, credits, text, csv } = global.FC;
 
             const $ = (id) => document.getElementById(id);
 
+            /**
+             * La pagina così com'è adesso, presa prima di toccare qualsiasi cosa: è lo
+             * stampo da cui esce la copia da scaricare. Il file non si può rileggere da
+             * disco (da file:// il browser non lo permette), ma il DOM appena caricato
+             * è ancora identico al file.
+             */
+            const STAMPO = '<!doctype html>\n' + document.documentElement.outerHTML;
+
             const engine = engineApi.createEngine({
-                budget: AUCTION_BUDGET,
-                players: PLAYERS,
+                budget: 500,
+                players: [],
                 redistribution: { strategy: 'spread', min: 1 },
-                storageKey: 'fantacalcio:asta:2026-2027',
+                storageKey: 'fantacalcio:inga:2026-2027',
                 storageVersion: 1,
                 easterEgg: true,
-                // Quanti giocatori devi avere a fine asta: sta in players.js perché è un
-                // dato della tua lega, non della lista. Non è la lunghezza della lista —
-                // gli slot che avanzano li riempi con acquisti fuori lista.
-                rosterSize: ROSTER_SIZE || PLAYERS.length,
+                rosterSize: 25,
             });
 
-            /**
-             * Le due liste di supporto. Non passano dal motore: non hanno massimali, non
-             * spostano crediti e non finiscono in rosa — sono solo promemoria da tenere
-             * davanti in asta. L'unico stato è chi hai già tolto, e viaggia dentro
-             * engine.extra così si salva e si azzera insieme a tutto il resto.
-             */
-            const shortlists = shortlistsApi.createShortlists([
-                { id: 'alternatives', label: 'Alternative', players: ALTERNATIVES },
-                { id: 'baits', label: "Da chiamare all'inizio", players: BAITS },
-            ]);
-
-            /** id della lista → gli elementi della pagina che la mostrano. */
-            const SHORTLIST_UI = {
-                alternatives: { wrap: 'wrapAlternatives', list: 'listAlternatives', button: 'btnToggleAlternatives' },
-                baits: { wrap: 'wrapBaits', list: 'listBaits', button: 'btnToggleBaits' },
-            };
-
-            /** Giocatore attualmente in asta e ultimo rilancio consigliato per lui. */
             let current = null;
             let suggested = null;
 
             // --- helper di output ---------------------------------------------------
 
-            /**
-             * Scrive un messaggio in un riquadro .out. Usa textContent per i nomi:
-             * la lista è un file che modifichi a mano, ma non è un buon motivo per
-             * iniettare HTML arbitrario nella pagina.
-             */
             function say(el, message, tone) {
                 el.textContent = message;
                 el.classList.remove('is-ok', 'is-warn', 'is-error');
                 if (tone) el.classList.add(`is-${tone}`);
             }
 
-            /** "Hojlund (A, Napoli)" — ruolo e squadra compaiono solo se la lista li ha. */
+            /** "Lautaro (A, Inter)" — ruolo e squadra solo se il CSV li aveva. */
             function describePlayer(p) {
                 const details = [p.role, p.team].filter(Boolean).join(', ');
                 return details ? `${p.name} (${details})` : p.name;
             }
 
+            const haLista = () => engine.pool.length > 0 || engine.purchases.length > 0;
+
             // --- rendering ----------------------------------------------------------
 
             function render() {
-                const c = engine.countsByRole();
-                $('countP').textContent = `P: ${c.P}`;
-                $('countD').textContent = `D: ${c.D}`;
-                $('countC').textContent = `C: ${c.C}`;
-                $('countA').textContent = `A: ${c.A}`;
+                const conLista = haLista();
+                $('app').hidden = !conLista;
+                $('importWrap').open = !conLista;
+                $('importSummary').textContent = conLista ? 'Carica un\'altra lista' : '1) Carica la lista';
+
+                $('playersLeft').textContent = `In lista: ${engine.pool.length}`;
                 $('sumNow').textContent = `Somma tetti: ${engine.sumMax()}`;
                 $('budgetLeft').textContent = `Crediti residui: ${engine.left()}`;
-                $('playersLeft').textContent = `In lista: ${engine.pool.length}`;
                 $('slotsLeft').textContent = engine.rosterSize
                     ? `Da comprare: ${engine.slotsLeft()}`
                     : 'Da comprare: —';
@@ -2163,18 +1814,13 @@
                 $('leftPill').textContent = `Residuo: ${engine.left()}`;
                 $('budgetInput').value = String(engine.budget);
                 $('rosterInput').value = String(engine.rosterSize);
-                renderCap();
 
+                renderCap();
                 renderPurchases();
                 renderRemaining();
-                renderShortlists();
                 renderBanner();
             }
 
-            /**
-             * La pillola col limite vero di spesa. Diventa rossa quando non basterebbe
-             * più nemmeno a completare la rosa a 1 credito a testa.
-             */
             function renderCap() {
                 const pill = $('maxSpend');
                 const cap = engine.maxSpendable();
@@ -2182,8 +1828,8 @@
                 pill.textContent = `Max spendibile: ${cap}`;
                 pill.classList.toggle('pill-danger', slots > 0 && cap < 1);
                 pill.title = slots > 0
-                    ? `Ti restano ${engine.left()} crediti e ${slots} giocatori da comprare: ${engine.reserve()} li tieni da parte per gli slot successivi.`
-                    : `Nessuna riserva impostata: puoi arrivare fino al residuo di ${engine.left()}.`;
+                    ? `Restano ${engine.left()} crediti e ${slots} giocatori da comprare: ${engine.reserve()} vanno tenuti da parte per gli altri posti.`
+                    : `Nessun posto da tenere da parte: puoi arrivare fino al residuo di ${engine.left()}.`;
             }
 
             function renderPurchases() {
@@ -2202,19 +1848,10 @@
                     label.textContent = describePlayer(p);
                     const price = document.createElement('strong');
                     price.textContent = String(p.price);
-
-                    if (p.offList) {
-                        // Non era fra i desiderati: si vede, ma senza allarmi rossi.
-                        const tag = document.createElement('span');
-                        tag.className = 'tag-off';
-                        tag.textContent = 'fuori lista';
-                        tag.title = 'Non era nella lista dei giocatori desiderati';
-                        label.appendChild(tag);
-                    } else if (p.max !== null && p.max !== undefined && p.price > p.max) {
+                    if (p.max !== null && p.max !== undefined && p.price > p.max) {
                         price.classList.add('over');
-                        price.title = `Sopra il tuo tetto di ${p.max}`;
+                        price.title = `Sopra il tetto di ${p.max}`;
                     }
-
                     li.append(label, price);
                     list.appendChild(li);
                 }
@@ -2234,27 +1871,127 @@
                 }
             }
 
-            /**
-             * Avvisa quando "somma tetti + speso" non fa più il budget. Con la
-             * ridistribuzione attiva le due cose devono coincidere: se non coincidono
-             * o la lista di partenza non quadrava, o dei crediti non sono stati
-             * assorbiti perché la lista si è svuotata.
-             */
+            /** Se la somma dei tetti più lo speso non fa i crediti totali, meglio dirlo subito. */
             function renderBanner() {
                 const banner = $('banner');
+                if (!haLista()) { banner.hidden = true; return; }
+
                 const diff = engine.allocated() - engine.budget;
-                if (diff === 0) {
-                    banner.hidden = true;
-                    return;
-                }
+                if (diff === 0) { banner.hidden = true; return; }
+
                 banner.hidden = false;
                 banner.className = 'banner ' + (diff > 0 ? 'banner-warn' : 'banner-info');
                 banner.textContent = diff > 0
-                    ? `⚠️ Stai pianificando ${diff} crediti più del budget: somma tetti ${engine.sumMax()} + speso ${engine.spent} = ${engine.allocated()}, budget ${engine.budget}.`
-                    : `ℹ️ Ti restano ${-diff} crediti non assegnati a nessun giocatore in lista.`;
+                    ? `⚠️ La lista vale ${diff} crediti più di quelli disponibili: somma tetti ${engine.sumMax()} + speso ${engine.spent} = ${engine.allocated()}, crediti totali ${engine.budget}. Si può giocare lo stesso, ma i tetti sono un po' ottimisti.`
+                    : `ℹ️ Ci sono ${-diff} crediti non assegnati a nessuno in lista.`;
             }
 
-            // --- gestione asta ------------------------------------------------------
+            // --- import del CSV -----------------------------------------------------
+
+            /**
+             * Carica la lista da un CSV. La lettura è la stessa del comando `npm run
+             * import`, quindi accetta le stesse intestazioni (e anche nessuna: in quel
+             * caso le colonne sono nome e offerta massima, in quest'ordine).
+             */
+            function importaCSV(testo, nomeFile) {
+                const out = $('outImport');
+
+                let records;
+                try {
+                    ({ records } = csv.readList(testo, { needMax: true }));
+                } catch (err) {
+                    say(out, `❌ ${err.message}`, 'error');
+                    return;
+                }
+
+                if (engine.purchases.length && !confirm(
+                    `Hai già registrato ${engine.purchases.length} acquisti.\n\n` +
+                    'Caricare una lista nuova li cancella. Procedo?')) {
+                    say(out, 'Annullato: la lista di prima è ancora quella buona.', 'warn');
+                    return;
+                }
+
+                const res = engine.loadPlayers(records);
+                if (!res.ok) { say(out, `❌ ${res.message}`, 'error'); return; }
+
+                // La lista di partenza serve a "Ricomincia da capo": senza, l'unico modo
+                // per tornare indietro sarebbe ricaricare il CSV.
+                engine.extra.listaOriginale = engine.pool.map(p => ({ name: p.name, role: p.role, team: p.team, max: p.max }));
+                engine.persist();
+
+                const parti = [`✅ Caricati ${res.count} giocatori${nomeFile ? ` da ${nomeFile}` : ''}, somma dei tetti ${engine.sumMax()}.`];
+                if (res.problems.length) parti.push(`${res.problems.length} righe saltate: ${res.problems.join(' ')}`);
+                say(out, parti.join(' '), res.problems.length ? 'warn' : 'ok');
+                render();
+            }
+
+            $('fileCsv').addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => importaCSV(String(reader.result), file.name);
+                reader.onerror = () => say($('outImport'), '❌ Non riesco a leggere il file.', 'error');
+                reader.readAsText(file, 'utf-8');
+                e.target.value = '';   // così ricaricare lo stesso file rifà scattare l'evento
+            });
+
+            // --- la pagina che si riscrive ------------------------------------------
+
+            /**
+             * Infila lo stato dentro una copia dello stampo e la fa scaricare.
+             *
+             * Il JSON va nel blocco <script id="datiIniziali">, con i "<" scritti come
+             * escape JSON (\u003c): un tag di chiusura finito dentro il nome di un
+             * giocatore chiuderebbe lo script, e la copia nascerebbe rotta.
+             */
+            function scaricaPagina() {
+                const out = $('outSave');
+                if (!haLista()) { say(out, '⚠️ Prima carica una lista.', 'warn'); return; }
+
+                const dati = {
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    salvatoIl: new Date().toISOString(),
+                    state: engine.state(),
+                };
+                const json = JSON.stringify(dati).replace(/</g, '\\u003c');
+
+                const BLOCCO = /(<script id="datiIniziali"[^>]*>)[\s\S]*?(<\/script>)/i;
+                if (!BLOCCO.test(STAMPO)) {
+                    say(out, '❌ Non trovo il punto dove incollare i dati: la pagina è stata modificata a mano?', 'error');
+                    return;
+                }
+                const html = STAMPO.replace(BLOCCO, (m, apre, chiude) => apre + json + chiude);
+
+                const oggi = new Date().toISOString().slice(0, 10);
+                const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `standalone_inga_${oggi}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                const quanti = engine.purchases.length === 1 ? '1 acquisto' : `${engine.purchases.length} acquisti`;
+                say(out, `⬇️ Scaricato standalone_inga_${oggi}.html: dentro ci sono ${engine.pool.length} giocatori ancora in lista e ${quanti}.`, 'ok');
+            }
+
+            /** I dati incollati nel file, se questa copia è già stata salvata da qualcuno. */
+            function datiIniziali() {
+                const el = $('datiIniziali');
+                if (!el) return null;
+                try {
+                    const dati = JSON.parse((el.textContent || '').trim() || 'null');
+                    return dati && dati.state && Array.isArray(dati.state.pool) ? dati : null;
+                } catch {
+                    return null;
+                }
+            }
+
+            $('btnSavePage').addEventListener('click', scaricaPagina);
+
+            // --- asta ---------------------------------------------------------------
 
             function openAuction(player, startOffer) {
                 current = player;
@@ -2279,32 +2016,27 @@
                 const out = $('outAuction');
                 const advice = engine.bidAdvice(current, $('currentOffer').value);
 
-                if (advice.status === 'invalid') {
-                    say(out, '❌ Offerta non valida.', 'error');
-                    return;
-                }
+                if (advice.status === 'invalid') { say(out, '❌ Offerta non valida.', 'error'); return; }
 
-                // Limite duro: non ci sono i crediti, indipendentemente dal piano.
                 if (advice.status === 'stop') {
                     suggested = null;
                     $('finalPrice').value = '';
                     const slots = engine.slotsLeft();
                     say(out, slots > 1
-                        ? `⛔ STOP: non puoi superare ${advice.cap}. Ti restano ${engine.left()} crediti e devi ancora comprare ${slots} giocatori.`
-                        : `⛔ STOP: non puoi superare ${advice.cap}, è tutto quello che ti resta.`, 'error');
+                        ? `⛔ STOP, lascialo andare: non si può superare ${advice.cap}. Restano ${engine.left()} crediti e ${slots} giocatori da comprare.`
+                        : `⛔ STOP: non si può superare ${advice.cap}, è tutto quello che resta.`, 'error');
                     return;
                 }
 
                 suggested = advice.bid;
                 $('finalPrice').value = String(advice.bid);
 
-                // Sopra il piano ma sostenibile: si può fare, basta saperlo.
                 if (advice.status === 'over') {
-                    say(out, `⚠️ Rilancia a ${advice.bid} se lo vuoi davvero: sono ${advice.overBy} crediti sopra il tuo tetto di ${advice.max}. Puoi arrivare fino a ${advice.cap}, ma li togli agli altri giocatori della lista.`, 'warn');
+                    say(out, `⚠️ Puoi rilanciare a ${advice.bid}, ma sono ${advice.overBy} crediti sopra il tetto di ${advice.max}: quei crediti li togli agli altri giocatori della lista. Il limite vero è ${advice.cap}.`, 'warn');
                     return;
                 }
 
-                say(out, `💰 Rilancia a ${advice.bid} (il tuo tetto è ${advice.max}, il limite di spesa ${advice.cap}).`, 'ok');
+                say(out, `💰 Rilancia a ${advice.bid} (il tetto per lui è ${advice.max}, il limite di spesa ${advice.cap}).`, 'ok');
             }
 
             function confirmWin() {
@@ -2314,27 +2046,23 @@
                 const price = raw === '' ? suggested : text.toInt(raw);
 
                 if (price === null || price === undefined) {
-                    say(out, '❌ Inserisci il prezzo finale pagato (o premi prima "Calcola la mia offerta").', 'error');
+                    say(out, '❌ Scrivi il prezzo finale pagato (o premi prima "Posso rilanciare?").', 'error');
                     return;
                 }
 
-                const name = current.name;
-                const res = engine.win(name, price);
-                if (!res.ok) {
-                    say(out, `❌ ${res.message}`, 'error');
-                    return;
-                }
+                const res = engine.win(current.name, price);
+                if (!res.ok) { say(out, `❌ ${res.message}`, 'error'); return; }
 
-                const parts = [`🎉 Preso ${res.player.name} per ${res.price}.`];
-                if (res.over) parts.push(`Sforato di ${res.price - res.player.max} sul tuo tetto di ${res.player.max}: i crediti li recuperi dagli altri.`);
-                if (res.redistribution.changes.length) parts.push(credits.describe(res.redistribution) + '.');
+                const parti = [`🎉 Preso ${res.player.name} per ${res.price}.`];
+                if (res.over) parti.push(`Sono ${res.price - res.player.max} sopra il tetto di ${res.player.max}: tolti agli altri.`);
+                if (res.redistribution.changes.length) parti.push(credits.describe(res.redistribution) + '.');
                 if (res.unabsorbed) {
-                    parts.push(res.unabsorbed > 0
-                        ? `${res.unabsorbed} crediti non assegnati: lista troppo corta.`
+                    parti.push(res.unabsorbed > 0
+                        ? `${res.unabsorbed} crediti non assegnati: la lista è corta.`
                         : `⚠️ ${-res.unabsorbed} crediti di sforamento non recuperabili: gli altri sono già tutti a 1.`);
                 }
 
-                say($('outBuy'), parts.join(' '), res.over ? 'warn' : 'ok');
+                say($('outBuy'), parti.join(' '), res.over ? 'warn' : 'ok');
                 closeAuction();
                 render();
                 flashLastPurchase();
@@ -2343,13 +2071,10 @@
             function confirmLoss() {
                 if (!current) return;
                 const res = engine.lose(current.name);
-                if (!res.ok) {
-                    say($('outAuction'), `❌ ${res.message}`, 'error');
-                    return;
-                }
-                const parts = [`😞 ${res.player.name} è andato ad altri, tolto dalla lista.`];
-                if (res.redistribution.changes.length) parts.push(credits.describe(res.redistribution) + '.');
-                say($('outBuy'), parts.join(' '), 'warn');
+                if (!res.ok) { say($('outAuction'), `❌ ${res.message}`, 'error'); return; }
+                const parti = [`😞 ${res.player.name} è andato a un altro, tolto dalla lista.`];
+                if (res.redistribution.changes.length) parti.push(credits.describe(res.redistribution) + '.');
+                say($('outBuy'), parti.join(' '), 'warn');
                 closeAuction();
                 render();
             }
@@ -2371,189 +2096,24 @@
 
                 if (!matches.length) {
                     closeAuction();
-
-                    // Già in rosa? Cercalo anche fra gli acquisti, non solo per nome esatto.
                     const presi = text.findCandidates(q, engine.purchases);
-                    if (presi.length === 1) {
-                        say(out, `ℹ️ "${presi[0].name}" l'hai già preso per ${presi[0].price}.`, 'warn');
+                    if (presi.length) {
+                        say(out, `ℹ️ ${presi.map(p => `${p.name} (${p.price})`).join(', ')}: già preso.`, 'warn');
                         return;
                     }
-                    if (presi.length > 1) {
-                        say(out, `ℹ️ Hai già preso: ${presi.map(p => `${p.name} (${p.price})`).join(', ')}.`, 'warn');
-                        return;
-                    }
-
-                    // Non è fra i desiderati: se lo vuoi comunque, il modulo è già pronto.
-                    $('offListName').value = q;
-                    say(out, `❌ "${q}" non è fra i tuoi giocatori desiderati. Se lo prendi lo stesso, registralo in "Ho preso uno fuori lista" qui sotto.`, 'error');
+                    say(out, `❌ "${q}" non è in lista: lascialo perdere, non era fra i suoi.`, 'error');
                     return;
                 }
                 if (matches.length > 1) {
                     closeAuction();
-                    say(out, `⚠️ Più match, sii più preciso:\n- ${matches.map(m => m.name).join('\n- ')}`, 'warn');
+                    say(out, `⚠️ Più di uno con questo nome:\n- ${matches.map(m => m.name).join('\n- ')}`, 'warn');
                     return;
                 }
                 say(out, `✅ Trovato: ${describePlayer(matches[0])}`, 'ok');
                 openAuction(matches[0]);
             }
 
-            // --- acquisto fuori lista -----------------------------------------------
-
-            function clearOffListForm() {
-                $('offListName').value = '';
-                $('offListRole').value = '';
-                $('offListTeam').value = '';
-                $('offListPrice').value = '';
-            }
-
-            /**
-             * Registra un giocatore che nella lista dei desiderati non c'è.
-             *
-             * Prima di aggiungerlo controlla che non sia un desiderato scritto a metà:
-             * un nome parziale che assomiglia a qualcuno in lista è quasi sempre un
-             * errore di battitura, e comprarlo dall'asta normale è meglio perché lì il
-             * suo tetto viene usato davvero.
-             */
-            function buyOffList() {
-                const out = $('outOffList');
-                const name = ($('offListName').value || '').trim();
-                if (!name) { say(out, '❌ Scrivi il nome del giocatore.', 'error'); return; }
-
-                const esatto = engine.find(name);
-                if (esatto) {
-                    say(out, `ℹ️ "${esatto.name}" è fra i tuoi desiderati, tetto ${esatto.max}: cercalo qui sopra e compralo dall'asta normale, così il tetto viene usato.`, 'warn');
-                    return;
-                }
-
-                const simili = engine.candidates(name);
-                if (simili.length && !confirm(
-                    `"${name}" assomiglia a giocatori che hai in lista:\n\n- ${simili.map(p => p.name).join('\n- ')}\n\n` +
-                    'Se è uno di loro annulla e compralo dall\'asta normale.\n' +
-                    `Lo aggiungo comunque come fuori lista?`)) {
-                    say(out, 'Annullato: cercalo nella lista qui sopra.', 'warn');
-                    return;
-                }
-
-                const res = engine.winOffList(name, $('offListPrice').value, {
-                    role: $('offListRole').value,
-                    team: $('offListTeam').value,
-                });
-                if (!res.ok) { say(out, `❌ ${res.message}`, 'error'); return; }
-
-                const parts = [`⚠️ "${res.player.name}" non è fra i tuoi giocatori desiderati: l'ho aggiunto lo stesso alla rosa per ${res.price}.`];
-                if (res.redistribution.changes.length) {
-                    parts.push(`Quei crediti li ho tolti a chi resta in lista — ${credits.describe(res.redistribution)}.`);
-                }
-                if (res.unabsorbed < 0) {
-                    parts.push(engine.pool.length
-                        ? `⚠️ ${-res.unabsorbed} crediti non recuperabili: gli altri in lista sono già tutti a 1.`
-                        : `⚠️ In lista non è rimasto nessuno: questi ${res.price} crediti sono tutti fuori piano.`);
-                }
-
-                say(out, parts.join(' '), 'warn');
-                say($('outBuy'), `➕ ${describePlayer(res.player)} aggiunto per ${res.price} (fuori lista).`, 'warn');
-                clearOffListForm();
-                render();
-                flashLastPurchase();
-            }
-
-            $('btnOffListBuy').addEventListener('click', buyOffList);
-            $('offListPrice').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); buyOffList(); }
-            });
-
-            // --- liste di supporto ---------------------------------------------------
-
-            /** "Zaccagni (C, Lazio)" — qui il massimale non c'è proprio. */
-            function describeEntry(p) {
-                const details = [p.role, p.team].filter(Boolean).join(', ');
-                return details ? `${p.name} (${details})` : p.name;
-            }
-
-            function renderShortlists() {
-                for (const id of shortlists.ids()) renderShortlist(id);
-            }
-
-            /**
-             * Disegna una lista e aggiorna il suo bottone. Il conteggio sta nel bottone
-             * apposta: mentre la lista è chiusa è l'unica cosa che ti dice se là dentro
-             * è rimasto ancora qualcuno.
-             */
-            function renderShortlist(id) {
-                const ui = SHORTLIST_UI[id];
-                if (!ui) return;
-                const wrap = $(ui.wrap);
-                const list = $(ui.list);
-                const button = $(ui.button);
-                const items = shortlists.items(id);
-
-                button.textContent = `${wrap.hidden ? '▾' : '▴'} ${shortlists.label(id)} (${items.length})`;
-                button.setAttribute('aria-expanded', String(!wrap.hidden));
-
-                list.textContent = '';
-                if (!items.length) {
-                    const li = document.createElement('li');
-                    li.className = 'empty';
-                    li.textContent = shortlists.size(id)
-                        ? 'Li hai tolti tutti: usa "Ripristina liste" per rimetterli.'
-                        : 'Lista vuota: scrivila in assets/js/data/shortlists.js.';
-                    list.appendChild(li);
-                    return;
-                }
-
-                for (const p of items) {
-                    const li = document.createElement('li');
-                    const label = document.createElement('span');
-                    label.textContent = describeEntry(p);
-
-                    const remove = document.createElement('button');
-                    remove.type = 'button';
-                    remove.className = 'remove';
-                    remove.textContent = '✕';
-                    remove.title = `Togli ${p.name}: è già stato chiamato`;
-                    remove.setAttribute('aria-label', `Togli ${p.name} da ${shortlists.label(id)}`);
-                    remove.addEventListener('click', () => removeFromShortlist(id, p.name));
-
-                    li.append(label, remove);
-                    list.appendChild(li);
-                }
-            }
-
-            /** Le rimozioni stanno in engine.extra: si salvano da sole, si azzerano col reset. */
-            function saveShortlists() {
-                engine.extra.shortlists = shortlists.toState();
-                engine.persist();
-            }
-
-            function removeFromShortlist(id, name) {
-                const res = shortlists.remove(id, name);
-                if (!res.ok) { say($('outShortlists'), `⚠️ ${res.message}`, 'warn'); return; }
-                saveShortlists();
-                renderShortlist(id);
-                say($('outShortlists'), `✕ ${res.entry.name} tolto da "${shortlists.label(id)}".`, 'ok');
-            }
-
-            function toggleShortlist(id) {
-                const wrap = $(SHORTLIST_UI[id].wrap);
-                wrap.hidden = !wrap.hidden;
-                renderShortlist(id);
-                if (!wrap.hidden) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-
-            $('btnToggleAlternatives').addEventListener('click', () => toggleShortlist('alternatives'));
-            $('btnToggleBaits').addEventListener('click', () => toggleShortlist('baits'));
-
-            $('btnRestoreShortlists').addEventListener('click', () => {
-                const res = shortlists.restoreAll();
-                if (!res.count) { say($('outShortlists'), 'Non avevi tolto nessuno.', 'warn'); return; }
-                saveShortlists();
-                renderShortlists();
-                say($('outShortlists'), res.count === 1
-                    ? '↩️ Rimesso 1 giocatore nelle due liste.'
-                    : `↩️ Rimessi ${res.count} giocatori nelle due liste.`, 'ok');
-            });
-
-            // --- eventi della ricerca e dell'asta -----------------------------------
+            // --- eventi -------------------------------------------------------------
 
             $('btnCheck').addEventListener('click', search);
             $('q').addEventListener('keydown', (e) => {
@@ -2569,14 +2129,14 @@
 
             $('btnRandom').addEventListener('click', () => {
                 const p = engine.randomPlayer();
-                if (!p) { say($('outRandom'), '❌ Lista vuota: non è rimasto nessuno.', 'error'); return; }
+                if (!p) { say($('outRandom'), '❌ Non è rimasto nessuno in lista.', 'error'); return; }
                 say($('outRandom'), `🎯 Estratto: ${describePlayer(p)}`, 'ok');
                 openAuction(p, 1);
             });
 
             $('btnNext').addEventListener('click', () => {
                 const p = engine.nextByMax();
-                if (!p) { say($('outRandom'), '❌ Lista vuota: non è rimasto nessuno.', 'error'); return; }
+                if (!p) { say($('outRandom'), '❌ Non è rimasto nessuno in lista.', 'error'); return; }
                 say($('outRandom'), `➡️ Il più caro rimasto: ${describePlayer(p)}`, 'ok');
                 openAuction(p, 1);
             });
@@ -2596,38 +2156,20 @@
                 if (!wrap.hidden) { wrap.open = true; renderRemaining(); }
             });
 
-            $('btnReset').addEventListener('click', () => {
-                if (!confirm('Reset totale: ripristina la lista di partenza e cancella tutti gli acquisti. Procedo?')) return;
-                engine.reset();
-                // engine.reset() svuota extra: le liste di supporto tornano intere insieme al resto.
-                shortlists.restoreAll();
-                closeAuction();
-                say($('outBuy'), '');
-                say($('outCheck'), '');
-                say($('outRandom'), '');
-                say($('outShortlists'), '');
-                say($('outSettings'), '✅ Reset completato.', 'ok');
-                render();
-            });
-
             $('btnUndo').addEventListener('click', () => {
                 const res = engine.undo();
                 if (!res.ok) { say($('outBuy'), `⚠️ ${res.message}`, 'warn'); return; }
                 const p = res.action.player;
                 const label = res.action.type === 'win'
                     ? `acquisto di ${p.name} per ${res.action.price}`
-                    : `"andato ad altri" di ${p.name}`;
-                // Un fuori lista in lista non ci torna: non c'era.
-                const coda = p.offList
-                    ? 'Non era fra i desiderati, quindi è solo uscito dalla rosa e i crediti sono tornati agli altri.'
-                    : `Rimesso in lista con tetto ${p.max}.`;
-                say($('outBuy'), `↩️ Annullato: ${label}. ${coda}`, 'ok');
+                    : `"andato a un altro" di ${p.name}`;
+                say($('outBuy'), `↩️ Annullato: ${label}. Rimesso in lista con tetto ${p.max}.`, 'ok');
                 closeAuction();
                 render();
             });
 
             $('btnExportCSV').addEventListener('click', () => {
-                const res = engine.exportCSV('acquisti_fantacalcio');
+                const res = engine.exportCSV('acquisti_inga');
                 say($('outBuy'), res.ok ? '📦 CSV esportato.' : `⚠️ ${res.message}`, res.ok ? 'ok' : 'warn');
             });
 
@@ -2639,22 +2181,61 @@
                     say($('outSettings'), errori.map(r => `❌ ${r.message}`).join('\n'), 'error');
                     return;
                 }
-                const rosa = engine.rosterSize
-                    ? `rosa da ${engine.rosterSize} (te ne mancano ${engine.slotsLeft()}), puoi spendere fino a ${engine.maxSpendable()} sul prossimo`
-                    : 'nessuna riserva per la rosa';
-                say($('outSettings'), `✅ Budget ${engine.budget}, ${rosa}.`, 'ok');
+                say($('outSettings'), `✅ ${engine.budget} crediti, rosa da ${engine.rosterSize} (ne mancano ${engine.slotsLeft()}), sul prossimo puoi arrivare a ${engine.maxSpendable()}.`, 'ok');
+            });
+
+            $('btnReset').addEventListener('click', () => {
+                const originale = engine.extra.listaOriginale;
+                if (!Array.isArray(originale) || !originale.length) {
+                    say($('outSettings'), '⚠️ Non ho più la lista di partenza: ricarica il CSV.', 'warn');
+                    return;
+                }
+                if (!confirm('Rimette la lista come l\'hai caricata e cancella tutti gli acquisti. Procedo?')) return;
+
+                const res = engine.loadPlayers(originale);
+                if (!res.ok) { say($('outSettings'), `❌ ${res.message}`, 'error'); return; }
+                engine.extra.listaOriginale = originale;
+                engine.persist();
+                closeAuction();
+                say($('outBuy'), '');
+                say($('outCheck'), '');
+                say($('outRandom'), '');
+                say($('outSettings'), '✅ Ricominciato da capo.', 'ok');
+                render();
             });
 
             // --- avvio --------------------------------------------------------------
 
-            const restored = engine.restore();
-            shortlists.fromState(engine.extra.shortlists);
-            render();
+            /*
+             * Tre casi: la pagina ha i dati incollati dentro (è una copia salvata da
+             * qualcuno), il browser ha un lavoro in corso, o non c'è niente e si parte
+             * dal CSV. Se il file porta dati più nuovi di quelli del browser vincono i
+             * suoi: vuol dire che è appena arrivato per mail.
+             */
+            const dalFile = datiIniziali();
+            const dalBrowser = engine.restore();
 
-            if (restored && (engine.purchases.length || engine.actions.length)) {
-                say($('outBuy'), `↺ Ripreso il lavoro salvato: ${engine.purchases.length} acquisti, ${engine.spent} crediti spesi. Usa "Reset totale" per ricominciare.`, 'ok');
-            } else if (!engine.storageAvailable) {
-                say($('outSettings'), '⚠️ Il browser non permette di salvare: se ricarichi la pagina perdi tutto.', 'warn');
+            if (dalFile && engine.extra.fileId !== dalFile.id) {
+                const cerano = dalBrowser && (engine.purchases.length || engine.pool.length);
+                engine.restore(dalFile.state);
+                engine.extra.fileId = dalFile.id;
+                engine.persist();
+                render();
+                const quando = dalFile.salvatoIl ? new Date(dalFile.salvatoIl).toLocaleString('it-IT') : null;
+                say($('outBuy'), cerano
+                    ? `↺ Questo file porta una lista più recente${quando ? ` (salvata il ${quando})` : ''}: uso quella, il lavoro precedente su questo browser è stato messo da parte.`
+                    : `↺ Lista caricata dal file${quando ? `, salvata il ${quando}` : ''}: ${engine.pool.length} giocatori in lista, ${engine.purchases.length === 1 ? '1 acquisto' : `${engine.purchases.length} acquisti`}.`, 'ok');
+            } else {
+                render();
+                if (dalBrowser && (engine.purchases.length || engine.actions.length)) {
+                    say($('outBuy'), `↺ Ripreso il lavoro salvato: ${engine.purchases.length} acquisti, ${engine.spent} crediti spesi.`, 'ok');
+                } else if (!engine.storageAvailable) {
+                    say($('outImport'), '⚠️ Questo browser non permette di salvare: se chiudi la pagina perdi tutto. Scarica la pagina con tutto dentro ogni tanto.', 'warn');
+                }
+            }
+
+            if (haLista()) {
+                say($('outImport'), 'La lista è già caricata. Se ne carichi un\'altra, gli acquisti fatti finora vengono cancellati.', 'warn');
             }
         })(typeof globalThis !== 'undefined' ? globalThis : window);
     </script>

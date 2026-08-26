@@ -323,3 +323,85 @@ test('esportare senza acquisti avvisa invece di scaricare un file vuoto', () => 
     const e = nuovo();
     assert.equal(e.exportCSV('x').ok, false);
 });
+
+// --- stato portabile --------------------------------------------------------
+//
+// La pagina base non tiene la lista in un file del repo: se la porta dentro
+// l'HTML, esportando lo stato e rimettendocelo dentro alla riapertura. Sono
+// queste due funzioni a reggere il passaggio del file da una persona all'altra.
+
+test('state() restituisce tutto quello che serve a ripartire', () => {
+    const e = nuovo({ budget: 100, players: [{ name: 'Tizio', max: 60 }, { name: 'Caio', max: 40 }] });
+    e.win('Tizio', 50);
+    const s = e.state();
+
+    assert.deepEqual(Object.keys(s).sort(),
+        ['actions', 'budget', 'extra', 'pool', 'purchases', 'rosterSize', 'spent'].sort());
+    assert.equal(s.budget, 100);
+    assert.equal(s.spent, 50);
+    assert.deepEqual(s.purchases.map(p => [p.name, p.price]), [['Tizio', 50]]);
+    assert.deepEqual(s.pool.map(p => p.name), ['Caio']);
+});
+
+test('state() è una copia: chi se la porta via non può sporcare il motore', () => {
+    const e = nuovo({ budget: 100, players: [{ name: 'Tizio', max: 100 }] });
+    const s = e.state();
+    s.pool.push({ name: 'Intruso', max: 1 });
+    s.budget = 9999;
+    s.extra.roba = true;
+
+    assert.equal(e.pool.length, 1);
+    assert.equal(e.budget, 100);
+    assert.deepEqual(e.extra, {});
+});
+
+test('restore(stato) riparte da uno stato arrivato da fuori', () => {
+    const partenza = nuovo({ budget: 100, players: [{ name: 'Tizio', max: 60 }, { name: 'Caio', max: 40 }] });
+    partenza.win('Tizio', 50);
+    partenza.lose('Caio');
+
+    const arrivo = nuovo({ budget: 500, players: [] });
+    assert.equal(arrivo.restore(partenza.state()), true);
+    assert.equal(arrivo.budget, 100);
+    assert.equal(arrivo.spent, 50);
+    assert.equal(arrivo.left(), 50);
+    assert.deepEqual(arrivo.purchases.map(p => p.name), ['Tizio']);
+    assert.deepEqual(arrivo.pool, []);
+});
+
+test('restore(stato) salva subito: chi riapre il file ritrova il lavoro', () => {
+    const backend = memoryBackend();
+    const partenza = nuovo({ budget: 100, players: [{ name: 'Tizio', max: 100 }] });
+    partenza.win('Tizio', 30);
+
+    const arrivo = nuovo({ budget: 500, players: [], storageKey: 'passaggio', storageBackend: backend });
+    arrivo.restore(partenza.state());
+
+    // Un motore nuovo sullo stesso storage deve vedere lo stato appena messo.
+    const dopoRiapertura = nuovo({ budget: 500, players: [], storageKey: 'passaggio', storageBackend: backend });
+    assert.equal(dopoRiapertura.restore(), true);
+    assert.equal(dopoRiapertura.spent, 30);
+    assert.deepEqual(dopoRiapertura.purchases.map(p => p.name), ['Tizio']);
+});
+
+test('restore(stato) rifiuta uno stato rotto invece di svuotare tutto', () => {
+    const e = nuovo({ budget: 100, players: [{ name: 'Tizio', max: 100 }] });
+    for (const rotto of [null, {}, { pool: 'no' }, { pool: [], purchases: 'no' }]) {
+        assert.equal(e.restore(rotto), false, JSON.stringify(rotto));
+    }
+    assert.equal(e.pool.length, 1, 'la lista di prima è ancora lì');
+});
+
+test('lo stato continua a funzionare dopo un giro completo di export e import', () => {
+    const a = nuovo({ budget: 100, players: [{ name: 'Tizio', max: 60 }, { name: 'Caio', max: 40 }] });
+    a.win('Tizio', 30);
+
+    const b = nuovo({ budget: 500, players: [] });
+    b.restore(JSON.parse(JSON.stringify(a.state())));   // come passare per un file
+    const res = b.win('Caio', 20);
+
+    assert.equal(res.ok, true);
+    assert.equal(b.spent, 50);
+    assert.equal(b.undo().ok, true, 'anche l\'annulla deve reggere');
+    assert.equal(b.spent, 30);
+});
