@@ -26,7 +26,11 @@
  *   nome     Giocatore, Nome, Name, Player
  *   ruolo    Ruolo, Role
  *   squadra  Squadra, Team, Club
- *   tetto    Max, Massimale, Tetto, Bid, Crediti
+ *   tetto    Max, Massimale, Tetto, Bid, Crediti, Offerta_max, Budget
+ *
+ * Le colonne in più (note, rigorista, "preso", ecc.) vengono ignorate, e una
+ * riga di totali in fondo — "TOTALE, ,  , 500" — viene saltata invece di
+ * diventare un giocatore senza nome.
  *
  * Il massimale serve solo alla lista d'asta e al pool della riparazione: nelle
  * due liste di supporto non si compra niente, quindi lì la colonna è ignorata.
@@ -97,7 +101,7 @@ const HEADERS = {
     name: ['giocatore', 'nome', 'name', 'player'],
     role: ['ruolo', 'role'],
     team: ['squadra', 'team', 'club'],
-    max: ['max', 'massimale', 'tetto', 'bid', 'crediti'],
+    max: ['max', 'massimale', 'tetto', 'bid', 'crediti', 'offerta_max', 'offerta max', 'offerta massima', 'budget'],
 };
 
 const ROLE_LABELS = { P: 'Portieri', D: 'Difensori', C: 'Centrocampisti', A: 'Attaccanti' };
@@ -161,11 +165,23 @@ function mapColumns(headerRow, needMax) {
     return mapping;
 }
 
+/**
+ * Le righe di riepilogo che uno si mette in fondo al foglio ("TOTALE … 500")
+ * non sono giocatori: saltarle in silenzio evita un avviso a ogni import.
+ */
+const RIEPILOGHI = ['totale', 'totali', 'total', 'somma', 'sum'];
+
+function isRiepilogo(row, mapping) {
+    const nome = mapping.name === undefined ? '' : String(row[mapping.name] ?? '').trim();
+    if (nome) return false;
+    return row.some(cella => RIEPILOGHI.includes(slug(cella)));
+}
+
 function rowsToRecords(rows, needMax) {
     const mapping = mapColumns(rows[0], needMax);
     const at = (row, field) => (mapping[field] === undefined ? '' : (row[mapping[field]] ?? ''));
 
-    return rows.slice(1).map(row => ({
+    return rows.slice(1).filter(row => !isRiepilogo(row, mapping)).map(row => ({
         name: at(row, 'name'),
         role: at(row, 'role'),
         team: at(row, 'team'),
