@@ -234,7 +234,7 @@ test('anche nelle liste di supporto duplicati e righe rotte vengono segnalati', 
 test('una lista di supporto senza righe valide non scrive niente', () => {
     const { code, err } = importa('Nome,Squadra\n,\n', ['--target', 'alternative']);
     assert.equal(code, 1);
-    assert.match(err, /nessuna riga valida|nessuna riga di dati/);
+    assert.match(err, /nessuna riga valida|nessuna riga di dati/i);
 });
 
 test('--target shortlists rigenera tutte e due dai CSV del repo', () => {

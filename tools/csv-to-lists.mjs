@@ -26,7 +26,9 @@
  *   nome     Giocatore, Nome, Name, Player
  *   ruolo    Ruolo, Role
  *   squadra  Squadra, Team, Club
- *   tetto    Max, Massimale, Tetto, Bid, Crediti, Offerta_max, Budget
+ *   tetto    Max, Massimale, Tetto, Bid, Crediti, Offerta_massima, Offerta_max, Budget
+ *
+ * L'intestazione si può anche omettere: senza, si assume "nome, offerta massima".
  *
  * Le colonne in più (note, rigorista, "preso", ecc.) vengono ignorate, e una
  * riga di totali in fondo — "TOTALE, ,  , 500" — viene saltata invece di
@@ -47,6 +49,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const { normalizePlayers } = require('../assets/js/core/engine.js');
 const { normalizeEntries } = require('../assets/js/core/shortlists.js');
+// La lettura dei CSV è condivisa con le pagine: un file accettato qui è
+// accettato anche dall'import a schermo, e viceversa.
+const csv = require('../assets/js/core/csv.js');
 
 /** Le liste con un massimale: una per file generato. */
 const PLAYER_TARGETS = {
@@ -97,109 +102,27 @@ const SHORTLISTS = [
     },
 ];
 
-const HEADERS = {
-    name: ['giocatore', 'nome', 'name', 'player'],
-    role: ['ruolo', 'role'],
-    team: ['squadra', 'team', 'club'],
-    max: ['max', 'massimale', 'tetto', 'bid', 'crediti', 'offerta_max', 'offerta max', 'offerta massima', 'budget'],
-};
-
 const ROLE_LABELS = { P: 'Portieri', D: 'Difensori', C: 'Centrocampisti', A: 'Attaccanti' };
 const ROLE_ORDER = ['P', 'D', 'C', 'A'];
 
-// --- parsing ----------------------------------------------------------------
-
-/** Parser CSV minimale ma corretto su virgolette, virgole nei campi e CRLF. */
-function parseCSV(input) {
-    const text = input.replace(/^﻿/, '');
-    const rows = [];
-    let row = [];
-    let field = '';
-    let quoted = false;
-
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-
-        if (quoted) {
-            if (ch === '"') {
-                if (text[i + 1] === '"') { field += '"'; i++; }
-                else quoted = false;
-            } else field += ch;
-            continue;
-        }
-
-        if (ch === '"') { quoted = true; }
-        else if (ch === ',' || ch === ';') { row.push(field); field = ''; }
-        else if (ch === '\r') { /* gestito dal \n che segue */ }
-        else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-        else field += ch;
-    }
-    row.push(field);
-    rows.push(row);
-
-    return rows
-        .map(r => r.map(c => c.trim()))
-        .filter(r => r.some(c => c !== ''));
-}
-
-const slug = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
-
-/**
- * Associa ogni colonna del CSV a un campo del modello, in base all'intestazione.
- * Il massimale è obbligatorio solo dove i crediti servono davvero.
- */
-function mapColumns(headerRow, needMax) {
-    const mapping = {};
-    headerRow.forEach((head, i) => {
-        const key = slug(head);
-        for (const [field, aliases] of Object.entries(HEADERS)) {
-            if (aliases.includes(key)) mapping[field] = i;
-        }
-    });
-    if (mapping.name === undefined) {
-        throw new Error(`Non trovo la colonna del nome. Intestazioni lette: ${headerRow.join(', ')}`);
-    }
-    if (needMax && mapping.max === undefined) {
-        throw new Error(`Non trovo la colonna del massimale. Intestazioni lette: ${headerRow.join(', ')}`);
-    }
-    return mapping;
-}
-
-/**
- * Le righe di riepilogo che uno si mette in fondo al foglio ("TOTALE … 500")
- * non sono giocatori: saltarle in silenzio evita un avviso a ogni import.
- */
-const RIEPILOGHI = ['totale', 'totali', 'total', 'somma', 'sum'];
-
-function isRiepilogo(row, mapping) {
-    const nome = mapping.name === undefined ? '' : String(row[mapping.name] ?? '').trim();
-    if (nome) return false;
-    return row.some(cella => RIEPILOGHI.includes(slug(cella)));
-}
-
-function rowsToRecords(rows, needMax) {
-    const mapping = mapColumns(rows[0], needMax);
-    const at = (row, field) => (mapping[field] === undefined ? '' : (row[mapping[field]] ?? ''));
-
-    return rows.slice(1).filter(row => !isRiepilogo(row, mapping)).map(row => ({
-        name: at(row, 'name'),
-        role: at(row, 'role'),
-        team: at(row, 'team'),
-        max: at(row, 'max'),
-    }));
-}
+// --- lettura ----------------------------------------------------------------
 
 /** CSV → righe già validate, con gli scarti segnalati a schermo. */
 function readList(raw, { needMax, source }) {
-    const rows = parseCSV(raw);
-    if (rows.length < 2) {
-        throw new Error(`${source}: nessuna riga di dati oltre all'intestazione.`);
+    let records;
+    try {
+        ({ records } = csv.readList(raw, { needMax }));
+    } catch (err) {
+        // Con più CSV in gioco, sapere quale è rotto conta quanto sapere cos'ha.
+        throw new Error(`${source}: ${err.message}`);
     }
-    const candidates = rowsToRecords(rows, needMax);
+    if (!records.length) throw new Error(`${source}: nessuna riga di dati.`);
+
     const { players, entries, problems } = needMax
-        ? normalizePlayers(candidates)
-        : normalizeEntries(candidates);
+        ? normalizePlayers(records)
+        : normalizeEntries(records);
     for (const p of problems) console.warn(`⚠️  ${source}: ${p}`);
+
     const list = players || entries;
     if (!list.length) throw new Error(`${source}: nessuna riga valida.`);
     return list;

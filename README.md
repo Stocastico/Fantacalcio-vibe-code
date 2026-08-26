@@ -8,6 +8,7 @@ Niente build, niente server: apri il file `.html` col doppio click.
 | `index.html` | asta principale |
 | `market-auction.html` | mercato di riparazione (massimali nascosti a schermo) |
 | `*-standalone.html` | le stesse pagine in un file solo, per portarle in giro — **generate** |
+| `standalone_inga.html` | versione base per chi chiama al posto di qualcun altro — **generata** |
 | `liste/*.csv` | ⚙️ **le liste che modifichi tu**, anche da Excel |
 | `assets/js/data/` | le stesse liste in JavaScript — **generate** dai CSV |
 | `2025-2026/` | archivio della stagione scorsa, congelato |
@@ -149,6 +150,35 @@ nei CSV.
 
 I nomi che ci trovi sono un esempio: sostituiscili con i tuoi in
 [`liste/alternative.csv`](liste/alternative.csv) e [`liste/esche.csv`](liste/esche.csv).
+
+## Chiamare al posto di qualcun altro
+
+[`standalone_inga.html`](standalone_inga.html) è una versione ridotta della pagina
+d'asta, per chi copre l'asta di un altro e la vede per la prima volta quel giorno:
+lista, ricerca, calcolo del rilancio, preso / andato ad altri, rosa. Niente liste di
+supporto, niente acquisti fuori lista.
+
+La differenza vera è che **la lista non ce l'ha dentro**: la si carica da un CSV con
+due colonne, `giocatore` e `offerta_massima` (l'intestazione può anche mancare; ruolo
+e squadra, se ci sono, vengono usati). Il file nel repo è vuoto apposta — chiunque lo
+apre ci mette la propria lista.
+
+Poi c'è **⬇️ Scarica la pagina con tutto dentro**: la pagina riscrive una copia di sé
+stessa con la lista e gli acquisti fatti finora incollati nel blocco
+`<script id="datiIniziali">`. Quella copia si manda per mail: chi la riceve la apre col
+doppio click e riparte esattamente da lì, senza CSV, senza Node, senza rete.
+
+Il giro tipico è questo:
+
+1. Passi `standalone_inga.html` a chi deve giocare l'asta.
+2. Lui carica il suo CSV e scarica la pagina con dentro la lista.
+3. Manda quel file a chi lo sostituirà al tavolo.
+4. Chi chiama per lui apre il file, fa la prima ora, e quando arriva il diretto
+   interessato gli passa il file scaricato di nuovo — con dentro gli acquisti.
+
+Quando apri una copia, chi vince fra i dati del file e quelli salvati nel browser lo
+decide il file: se porta dati diversi da quelli dell'ultima apertura, sono i suoi a
+valere. È il caso normale — vuol dire che è appena arrivato per mail.
 
 ## Ridistribuzione dei crediti
 

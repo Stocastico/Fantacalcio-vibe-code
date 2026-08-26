@@ -121,9 +121,19 @@
             return copy;
         }
 
+        /** Tutto lo stato in un oggetto: è questo che si salva, e che si può rimettere dentro. */
+        function currentState() {
+            return { budget, rosterSize, pool, purchases, spent, actions, extra };
+        }
+
+        /** Copia indipendente dello stato, per chi se lo vuole portare via (export, backup). */
+        function state() {
+            return JSON.parse(JSON.stringify(currentState()));
+        }
+
         function persist() {
             if (!store) return false;
-            return store.save({ budget, rosterSize, pool, purchases, spent, actions, extra });
+            return store.save(currentState());
         }
 
         // --- lettura stato -------------------------------------------------
@@ -443,9 +453,13 @@
         // --- persistenza ---------------------------------------------------
 
         /** Ricarica lo stato salvato. Se manca o è incoerente, non tocca niente. */
-        function restore() {
-            if (!store) return false;
-            const s = store.load();
+        /**
+         * Rimette dentro uno stato salvato. Senza argomenti lo prende da
+         * localStorage; passandone uno si riparte da lì — serve alle pagine che
+         * si portano lo stato dentro il file invece che nel browser.
+         */
+        function restore(esterno) {
+            const s = esterno === undefined ? (store ? store.load() : null) : esterno;
             if (!s || !Array.isArray(s.pool) || !Array.isArray(s.purchases)) return false;
 
             const restoredPool = normalizePlayers(s.pool).players;
@@ -466,6 +480,8 @@
             spent = restoredPurchases.reduce((a, p) => a + p.price, 0);
             actions = Array.isArray(s.actions) ? s.actions : [];
             extra = (s.extra && typeof s.extra === 'object') ? s.extra : {};
+            // Uno stato arrivato da fuori non è ancora salvato in questo browser.
+            if (esterno !== undefined) persist();
             return true;
         }
 
@@ -531,6 +547,7 @@
             setBudget,
             setRosterSize,
             restore,
+            state,
             persist,
             clearSaved,
             csvRows,

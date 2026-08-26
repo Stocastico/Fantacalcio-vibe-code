@@ -19,6 +19,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TARGETS = [
     { src: 'index.html', out: 'index-standalone.html' },
     { src: 'market-auction.html', out: 'market-auction-standalone.html' },
+    // Versione base per chi chiama al posto di qualcun altro: la lista non ce
+    // l'ha dentro, se la carica da un CSV.
+    { src: 'inga.html', out: 'standalone_inga.html' },
 ];
 
 /** I link fra le due pagine devono puntare alle rispettive versioni standalone. */
