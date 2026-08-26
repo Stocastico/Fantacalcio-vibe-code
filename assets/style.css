@@ -438,6 +438,49 @@ ul.list strong.over {
     color: var(--danger);
 }
 
+/* --- liste di supporto (alternative ed esche) ------------------------------ */
+
+/* Aperte tutte e due di fila, senza un titolo sopra sembrerebbero una lista sola. */
+.shortlist-title {
+    margin: 16px 0 0;
+    font-weight: 700;
+    color: var(--heading);
+}
+
+.shortlist-title .muted {
+    font-weight: 500;
+}
+
+/* Sono promemoria, non la wishlist: più basse di riga e senza numeri a destra. */
+ul.list.shortlist {
+    margin-top: 8px;
+    max-height: 300px;
+}
+
+ul.list.shortlist li {
+    align-items: center;
+    padding: 8px 10px 8px 14px;
+}
+
+/* La ✕ per togliere chi è già stato chiamato: discreta finché non ci passi sopra. */
+ul.list.shortlist button.remove {
+    flex: none;
+    padding: 2px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    box-shadow: none;
+}
+
+ul.list.shortlist button.remove:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+
 /* Marca gli acquisti che non erano nella lista dei desiderati. */
 .tag-off {
     display: inline-block;
