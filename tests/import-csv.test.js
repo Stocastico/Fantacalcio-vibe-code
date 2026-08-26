@@ -130,19 +130,63 @@ test('un target inesistente non fa danni', () => {
     assert.match(err, /--target sconosciuto/);
 });
 
-// --- liste di supporto ------------------------------------------------------
-
-const CSV_SUPPORTO = `Ruolo,Giocatore,Squadra
-C,Zaccagni,Lazio
-A,Cutrone,Como
-`;
-
 /** Il corpo di un array del file generato, senza il commento in testa. */
 function corpoArray(out, nome) {
     const start = out.indexOf(`${nome} = [`);
     assert.notEqual(start, -1, `manca l'array ${nome}`);
     return out.slice(start, out.indexOf('];', start));
 }
+
+// --- fogli veri, con colonne in più -----------------------------------------
+
+test('riconosce la colonna del massimale anche quando si chiama Offerta_max', () => {
+    const { code, out } = importa(
+        'Ruolo,Giocatore,Squadra,Offerta_max,Rigorista,Note\nA,Hojlund,Napoli,67,No,Riferimento offensivo\n',
+        ['--budget', '67']);
+    assert.equal(code, 0);
+    assert.match(out, /name: "Hojlund",\s+role: "A",\s+team: "Napoli",\s+max:\s+67/);
+});
+
+test('le colonne in più del foglio non finiscono nel file generato', () => {
+    const { out } = importa(
+        'Ruolo,Giocatore,Squadra,Max,Rigorista,Note,Preso,Prezzo_pagato\nA,Colombo,Genoa,20,Si,Rigorista designato,,\n',
+        ['--budget', '20']);
+    const corpo = corpoArray(out, 'PLAYERS');
+    assert.ok(!corpo.includes('Rigorista'), 'la colonna Rigorista è finita in lista');
+    assert.ok(!corpo.includes('Prezzo_pagato'));
+    assert.match(corpo, /\{ name: "Colombo", role: "A", team: "Genoa", max: 20 \},/);
+});
+
+test('la riga dei totali in fondo al foglio viene saltata senza lamentarsi', () => {
+    const { code, out, err } = importa(
+        'Ruolo,Giocatore,Squadra,Offerta_max\nP,Svilar,Roma,26\nA,Hojlund,Napoli,74\nTOTALE,,,100\n',
+        ['--budget', '100']);
+    assert.equal(code, 0);
+    assert.match(out, /2 giocatori, somma massimali 100/);
+    assert.ok(!/TOTALE/i.test(corpoArray(out, 'PLAYERS')), 'il totale è diventato un giocatore');
+    assert.ok(!/nome mancante/.test(err), 'una riga di totali non è un errore da segnalare');
+});
+
+test('una riga senza nome che non è un totale viene invece segnalata', () => {
+    const { err } = importa('Ruolo,Giocatore,Squadra,Max\nP,Svilar,Roma,26\nD,,Roma,10\n', ['--budget', '36']);
+    assert.match(err, /nome mancante/);
+});
+
+test('anche nelle liste di supporto la riga dei totali viene saltata', () => {
+    const { code, out } = importa(
+        'Ruolo,Giocatore,Squadra,Offerta_max\nA,Kean,Fiorentina,60\nTOTALE,,,60\n',
+        ['--target', 'esche']);
+    assert.equal(code, 0);
+    assert.match(out, /1 giocatori in "esche"/);
+    assert.ok(!/TOTALE/i.test(corpoArray(out, 'BAITS')));
+});
+
+// --- liste di supporto ------------------------------------------------------
+
+const CSV_SUPPORTO = `Ruolo,Giocatore,Squadra
+C,Zaccagni,Lazio
+A,Cutrone,Como
+`;
 
 test('le liste di supporto non vogliono la colonna del massimale', () => {
     const { code, out } = importa(CSV_SUPPORTO, ['--target', 'alternative']);

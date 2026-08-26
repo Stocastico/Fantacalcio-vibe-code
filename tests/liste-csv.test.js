@@ -25,15 +25,43 @@ const CSV = {
     esche: 'liste/esche.csv',
 };
 
+/**
+ * Le colonne dei CSV le scrivi tu, quindi vanno riconosciute per sinonimo come
+ * fa il tool. Gli alias sono ripetuti qui apposta: se il test riusasse la
+ * tabella del tool, un alias sbagliato passerebbe inosservato da tutte e due
+ * le parti.
+ */
+const ALIAS = {
+    nome: ['giocatore', 'nome', 'name', 'player'],
+    ruolo: ['ruolo', 'role'],
+    squadra: ['squadra', 'team', 'club'],
+    max: ['max', 'massimale', 'tetto', 'bid', 'crediti', 'offerta_max', 'offerta max', 'offerta massima', 'budget'],
+};
+
+const RIEPILOGHI = ['totale', 'totali', 'total', 'somma', 'sum'];
+
 /** Parser minimo, apposta diverso da quello del tool: due bug uguali sono improbabili. */
 function leggiCSV(relPath) {
     const testo = readFileSync(resolve(root, relPath), 'utf8').replace(/^﻿/, '');
     const righe = testo.split(/\r?\n/).filter(r => r.trim() !== '');
     const intestazione = righe[0].split(',').map(c => c.trim().toLowerCase());
-    return righe.slice(1).map(riga => {
-        const celle = riga.split(',').map(c => c.trim());
-        return Object.fromEntries(intestazione.map((h, i) => [h, celle[i] ?? '']));
+
+    // Da intestazione a campo del modello: "Offerta_max" → max, "Note" → niente.
+    const campo = intestazione.map(h => {
+        for (const [nome, alias] of Object.entries(ALIAS)) if (alias.includes(h)) return nome;
+        return null;
     });
+
+    return righe.slice(1)
+        .map(riga => {
+            const celle = riga.split(',').map(c => c.trim());
+            const out = { nome: '', ruolo: '', squadra: '', max: '' };
+            campo.forEach((nome, i) => { if (nome) out[nome] = celle[i] ?? ''; });
+            out.celle = celle;
+            return out;
+        })
+        // La riga dei totali in fondo al foglio non è un giocatore.
+        .filter(r => !(r.nome === '' && r.celle.some(c => RIEPILOGHI.includes(c.toLowerCase()))));
 }
 
 /** Lancia il tool in dry-run e ricava il contenuto che scriverebbe in ogni file. */
@@ -67,14 +95,14 @@ for (const [nome, path] of Object.entries(CSV)) {
 
     test(`${path}: ogni riga ha nome, ruolo e squadra`, () => {
         for (const riga of leggiCSV(path)) {
-            assert.ok(riga.giocatore, `riga senza nome in ${path}`);
-            assert.ok(['P', 'D', 'C', 'A'].includes(riga.ruolo), `${riga.giocatore}: ruolo "${riga.ruolo}"`);
-            assert.ok(riga.squadra, `${riga.giocatore}: squadra mancante`);
+            assert.ok(riga.nome, `riga senza nome in ${path}`);
+            assert.ok(['P', 'D', 'C', 'A'].includes(riga.ruolo), `${riga.nome}: ruolo "${riga.ruolo}"`);
+            assert.ok(riga.squadra, `${riga.nome}: squadra mancante`);
         }
     });
 
     test(`${path}: nessun nome ripetuto`, () => {
-        const nomi = leggiCSV(path).map(r => r.giocatore.toLowerCase());
+        const nomi = leggiCSV(path).map(r => r.nome.toLowerCase());
         assert.equal(new Set(nomi).size, nomi.length, `nomi doppi in ${path}`);
     });
 }
@@ -84,17 +112,31 @@ test('liste/lista.csv: i massimali sono interi positivi e sommano al budget', ()
     let somma = 0;
     for (const riga of righe) {
         const max = Number(riga.max);
-        assert.ok(Number.isInteger(max) && max >= 1, `${riga.giocatore}: max "${riga.max}"`);
+        assert.ok(Number.isInteger(max) && max >= 1, `${riga.nome}: max "${riga.max}"`);
         somma += max;
     }
     assert.equal(somma, players.AUCTION_BUDGET, 'la somma dei tetti deve fare il budget');
 });
 
-test('le due liste di supporto non hanno la colonna del massimale', () => {
-    for (const path of [CSV.alternative, CSV.esche]) {
-        const intestazione = readFileSync(resolve(root, path), 'utf8').split(/\r?\n/)[0].toLowerCase();
-        assert.ok(!/\bmax\b|massimale|tetto/.test(intestazione), `${path}: qui i crediti non servono`);
+test('nelle liste di supporto un eventuale massimale non finisce nel file generato', () => {
+    // I CSV possono avere colonne in più (offerta, note, "sostituisce"): nelle
+    // due liste di supporto non si compra niente, quindi restano fuori.
+    const generato = readFileSync(resolve(root, 'assets/js/data/shortlists.js'), 'utf8');
+    const corpo = generato.slice(generato.indexOf('ALTERNATIVES = ['));
+    assert.ok(!corpo.includes('max:'), 'un massimale è finito nelle liste di supporto');
+
+    for (const lista of [shortlists.ALTERNATIVES, shortlists.BAITS]) {
+        for (const p of lista) {
+            assert.deepEqual(Object.keys(p).sort(), ['name', 'role', 'team'], `${p.name}: campi in più`);
+        }
     }
+});
+
+test('la riga dei totali del foglio non diventa un giocatore', () => {
+    const grezzo = readFileSync(resolve(root, CSV.lista), 'utf8');
+    if (!/^\s*totale/im.test(grezzo)) return; // il foglio può non averla
+    assert.ok(!players.PLAYERS.some(p => /totale/i.test(p.name)), 'la riga TOTALE è finita in lista');
+    assert.equal(players.PLAYERS.length, leggiCSV(CSV.lista).length);
 });
 
 // --- CSV e file generati dicono la stessa cosa ------------------------------
@@ -102,9 +144,9 @@ test('le due liste di supporto non hanno la colonna del massimale', () => {
 const stessoContenuto = (righeCSV, lista) => {
     assert.equal(lista.length, righeCSV.length, 'numero di giocatori diverso');
     righeCSV.forEach((riga, i) => {
-        assert.equal(lista[i].name, riga.giocatore, `riga ${i + 1}: nome diverso`);
-        assert.equal(lista[i].role, riga.ruolo, `${riga.giocatore}: ruolo diverso`);
-        assert.equal(lista[i].team, riga.squadra, `${riga.giocatore}: squadra diversa`);
+        assert.equal(lista[i].name, riga.nome, `riga ${i + 1}: nome diverso`);
+        assert.equal(lista[i].role, riga.ruolo, `${riga.nome}: ruolo diverso`);
+        assert.equal(lista[i].team, riga.squadra, `${riga.nome}: squadra diversa`);
     });
 };
 
@@ -117,7 +159,7 @@ test('players.js contiene gli stessi giocatori di liste/lista.csv', () => {
     const righe = leggiCSV(CSV.lista);
     assert.equal(players.PLAYERS.length, righe.length);
 
-    const daCSV = new Map(righe.map(r => [r.giocatore.toLowerCase(), r]));
+    const daCSV = new Map(righe.map(r => [r.nome.toLowerCase(), r]));
     for (const p of players.PLAYERS) {
         const riga = daCSV.get(p.name.toLowerCase());
         assert.ok(riga, `${p.name} non è nel CSV`);
