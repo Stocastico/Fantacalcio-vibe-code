@@ -16,12 +16,17 @@
  *
  * La somma dei massimali fa 500, esattamente il budget.
  *
+ * ROSTER_SIZE è quanti giocatori devi avere a fine asta: serve a tenere da
+ * parte 1 credito per ogni slot ancora vuoto. Non deve coincidere con la lunghezza
+ * della lista — gli slot che avanzano li riempi con acquisti fuori lista.
+ *
  * Nota: la lista non è offuscata e questo repository è pubblico.
  */
 ;(function (global) {
     'use strict';
 
     const AUCTION_BUDGET = 500;
+    const ROSTER_SIZE = 25;
 
     const PLAYERS = [
         // Portieri — 3, 45 crediti
@@ -58,7 +63,7 @@
         { name: "Colombo",       role: "A", team: "Genoa",    max:   7 },
     ];
 
-    const api = { AUCTION_BUDGET, PLAYERS };
+    const api = { AUCTION_BUDGET, ROSTER_SIZE, PLAYERS };
 
     global.FC = global.FC || {};
     global.FC.playersData = api;

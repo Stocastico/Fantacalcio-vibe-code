@@ -76,6 +76,46 @@
                         <button id="btnCancelAuction" class="secondary">Chiudi senza fare nulla</button>
                     </div>
                 </section>
+
+                <section class="card" id="offListSection">
+                    <!-- Senza numero: non è un passo del flusso, è la via d'uscita quando
+                         quello che compri nella lista non c'è. -->
+                    <h3>Ho preso uno fuori lista</h3>
+                    <p class="muted">
+                        Sei in asta e ti scappa l'occasione, o alla fine devi solo riempire uno
+                        slot. Lo registro lo stesso: i crediti che paghi li tolgo dai tetti dei
+                        giocatori che ti restano in lista.
+                    </p>
+
+                    <label for="offListName">Nome del giocatore</label>
+                    <input id="offListName" type="text" placeholder="es. Pellegrini" autocomplete="off" />
+
+                    <div class="row">
+                        <div style="flex:1; min-width:120px;">
+                            <label for="offListRole">Ruolo (facoltativo)</label>
+                            <select id="offListRole">
+                                <option value="">—</option>
+                                <option value="P">P</option>
+                                <option value="D">D</option>
+                                <option value="C">C</option>
+                                <option value="A">A</option>
+                            </select>
+                        </div>
+                        <div style="flex:1; min-width:120px;">
+                            <label for="offListTeam">Squadra (facoltativa)</label>
+                            <input id="offListTeam" type="text" placeholder="es. Roma" autocomplete="off" />
+                        </div>
+                        <div style="flex:1; min-width:120px;">
+                            <label for="offListPrice">Prezzo pagato</label>
+                            <input id="offListPrice" type="number" inputmode="numeric" min="0" step="1" placeholder="es. 12" />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <button id="btnOffListBuy" class="secondary">➕ Aggiungi alla rosa</button>
+                    </div>
+                    <div id="outOffList" class="out" aria-live="polite"></div>
+                </section>
             </div>
 
             <section class="card" style="margin-top:20px;">
