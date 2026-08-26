@@ -1,20 +1,29 @@
 /**
  * Test end-to-end del convertitore: viene lanciato davvero come processo, con
  * il CSV sullo standard input e --dry-run, così non tocca i file del repo.
+ *
+ * Il "-" fra gli argomenti è quello che dice al tool di leggere lo standard
+ * input: senza, un comando nudo rigenererebbe tutte le liste dai CSV del repo.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { resolve } = require('node:path');
 
-const TOOL = resolve(__dirname, '../tools/csv-to-players.mjs');
+const TOOL = resolve(__dirname, '../tools/csv-to-lists.mjs');
 
-function importa(csv, args = []) {
+function esegui(args, input = '') {
     const res = spawnSync(process.execPath, [TOOL, '--dry-run', ...args], {
-        input: csv,
+        input,
         encoding: 'utf8',
+        cwd: resolve(__dirname, '..'),
     });
     return { code: res.status, out: res.stdout || '', err: res.stderr || '' };
+}
+
+/** Un CSV letto dallo standard input. */
+function importa(csv, args = []) {
+    return esegui(['-', ...args], csv);
 }
 
 const CSV = `Ruolo,Giocatore,Squadra,Max
@@ -119,4 +128,145 @@ test('un target inesistente non fa danni', () => {
     const { code, err } = importa(CSV, ['--target', 'inventato']);
     assert.equal(code, 1);
     assert.match(err, /--target sconosciuto/);
+});
+
+// --- liste di supporto ------------------------------------------------------
+
+const CSV_SUPPORTO = `Ruolo,Giocatore,Squadra
+C,Zaccagni,Lazio
+A,Cutrone,Como
+`;
+
+/** Il corpo di un array del file generato, senza il commento in testa. */
+function corpoArray(out, nome) {
+    const start = out.indexOf(`${nome} = [`);
+    assert.notEqual(start, -1, `manca l'array ${nome}`);
+    return out.slice(start, out.indexOf('];', start));
+}
+
+test('le liste di supporto non vogliono la colonna del massimale', () => {
+    const { code, out } = importa(CSV_SUPPORTO, ['--target', 'alternative']);
+    assert.equal(code, 0);
+    assert.match(out, /name: "Zaccagni",\s+role: "C",\s+team: "Lazio"/);
+    assert.ok(!corpoArray(out, 'ALTERNATIVES').includes('max:'), 'qui i crediti non c\'entrano');
+});
+
+test('un massimale nel CSV delle liste di supporto viene ignorato', () => {
+    const { code, out } = importa('Nome,Ruolo,Squadra,Max\nZaccagni,C,Lazio,99\n', ['--target', 'esche']);
+    assert.equal(code, 0);
+    assert.ok(!corpoArray(out, 'BAITS').includes('max:'));
+    assert.ok(!corpoArray(out, 'BAITS').includes('99'));
+});
+
+test('importare una lista di supporto non svuota l altra', () => {
+    const { code, out } = importa(CSV_SUPPORTO, ['--target', 'alternative']);
+    assert.equal(code, 0);
+    // Le esche non le ho toccate: arrivano dal loro CSV nel repo.
+    assert.match(out, /const BAITS = \[\n\s+\{ name: "/);
+    assert.match(out, /liste\/esche\.csv/);
+});
+
+test('le due liste di supporto stanno in un file solo, con le due costanti', () => {
+    const { out } = importa(CSV_SUPPORTO, ['--target', 'esche']);
+    assert.match(out, /const api = \{ ALTERNATIVES, BAITS \};/);
+    assert.match(out, /global\.FC\.shortlistsData/);
+    assert.match(out, /assets\/js\/data\/shortlists\.js non scritto/);
+});
+
+test('il file generato per le liste di supporto è JavaScript valido', () => {
+    const { out } = importa(CSV_SUPPORTO, ['--target', 'alternative']);
+    const codice = out.slice(out.indexOf('/**'));
+    assert.doesNotThrow(() => new Function(codice));
+});
+
+test('anche nelle liste di supporto duplicati e righe rotte vengono segnalati', () => {
+    const { code, err, out } = importa('Nome,Squadra\nLeao,Milan\nleao,Milan\n,Inter\n', ['--target', 'esche']);
+    assert.equal(code, 0);
+    assert.match(err, /duplicato/);
+    assert.match(err, /nome mancante/);
+    assert.match(out, /1 giocatori in "esche"/);
+});
+
+test('una lista di supporto senza righe valide non scrive niente', () => {
+    const { code, err } = importa('Nome,Squadra\n,\n', ['--target', 'alternative']);
+    assert.equal(code, 1);
+    assert.match(err, /nessuna riga valida|nessuna riga di dati/);
+});
+
+test('--target shortlists rigenera tutte e due dai CSV del repo', () => {
+    const { code, out, err } = esegui(['--target', 'shortlists']);
+    assert.equal(code, 0, err);
+    assert.match(out, /liste\/alternative\.csv → \d+ giocatori in "alternative"/);
+    assert.match(out, /liste\/esche\.csv → \d+ giocatori in "esche"/);
+    assert.ok(!out.includes('assets/js/data/players.js non scritto'),
+        'la lista d\'asta non viene rigenerata');
+});
+
+// --- il comando nudo --------------------------------------------------------
+
+test('senza argomenti rigenera tutte e tre le liste dai CSV del repo', () => {
+    const { code, out, err } = esegui([]);
+    assert.equal(code, 0, err);
+    assert.match(out, /liste\/lista\.csv → 25 giocatori/);
+    assert.match(out, /liste\/alternative\.csv/);
+    assert.match(out, /liste\/esche\.csv/);
+    assert.match(out, /assets\/js\/data\/players\.js non scritto/);
+    assert.match(out, /assets\/js\/data\/shortlists\.js non scritto/);
+});
+
+test('la lista d asta di default esce dal CSV del repo e quadra col budget', () => {
+    const { out } = esegui([]);
+    assert.match(out, /somma massimali 500, budget 500/);
+    assert.match(out, /const AUCTION_BUDGET = 500;/);
+    assert.match(out, /const ROSTER_SIZE = 25;/);
+});
+
+test('il mercato di riparazione non ha un CSV suo: senza file lo dice', () => {
+    const { code, err } = esegui(['--target', 'market']);
+    assert.equal(code, 1);
+    assert.match(err, /nessun CSV indicato/);
+});
+
+test('un file passato a mano ha la precedenza sul CSV del repo', () => {
+    const { code, out } = esegui(['liste/alternative.csv', '--target', 'esche']);
+    assert.equal(code, 0);
+    // Le esche diventano il contenuto del CSV delle alternative.
+    assert.match(corpoArray(out, 'BAITS'), /Carnesecchi/);
+});
+
+// --- CSV mancante -----------------------------------------------------------
+
+/**
+ * Le due liste stanno in un file solo, quindi importarne una riscrive anche
+ * l'altra: se il CSV dell'altra è sparito, la cosa giusta è tenere quella già
+ * generata, non azzerarla in silenzio.
+ */
+test('se manca il CSV di una lista di supporto, quella lista non viene persa', () => {
+    const { mkdtempSync, cpSync, rmSync, existsSync } = require('node:fs');
+    const { tmpdir } = require('node:os');
+    const { join } = require('node:path');
+
+    const root = resolve(__dirname, '..');
+    const copia = mkdtempSync(join(tmpdir(), 'fanta-'));
+    cpSync(root, copia, {
+        recursive: true,
+        filter: (src) => !/(\.git|node_modules|2025-2026)$/.test(src),
+    });
+
+    try {
+        rmSync(join(copia, 'liste/esche.csv'));
+        assert.ok(!existsSync(join(copia, 'liste/esche.csv')));
+
+        const res = spawnSync(process.execPath, [
+            resolve(copia, 'tools/csv-to-lists.mjs'), '--dry-run', '--target', 'alternative',
+        ], { encoding: 'utf8', cwd: copia, input: '' });
+
+        assert.equal(res.status, 0, res.stderr);
+        assert.match(res.stderr, /esche.*non leggibile|non leggibile.*esche/);
+        // Le esche restano quelle del file già generato.
+        const { BAITS } = require('../assets/js/data/shortlists.js');
+        for (const p of BAITS) assert.ok(res.stdout.includes(`"${p.name}"`), `persa l'esca ${p.name}`);
+    } finally {
+        rmSync(copia, { recursive: true, force: true });
+    }
 });
