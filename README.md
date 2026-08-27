@@ -172,6 +172,22 @@ stessa con la lista e gli acquisti fatti finora incollati nel blocco
 `<script id="datiIniziali">`. Quella copia si manda per mail: chi la riceve la apre col
 doppio click e riparte esattamente da lì, senza CSV, senza Node, senza rete.
 
+### I numeri riservati
+
+Chi chiama per un altro non deve vedere il suo piano di spesa. La pagina parte quindi
+con **tetti e ridistribuzione dei crediti nascosti**: niente massimale per giocatore,
+niente "somma tetti", niente elenco di chi ha ceduto crediti a chi, e niente colonna
+dei massimali nel CSV esportato. Restano visibili le cose che servono a chiamare: chi
+c'è in lista, quanto si è speso, e la pillola *Max spendibile*.
+
+Il bottone rosso **⛔ Mostra i numeri riservati** li rimette a schermo, previa conferma,
+e li rinasconde. Riaprendo la pagina si riparte sempre da nascosti, anche a metà asta:
+se il file passa di mano, passa già chiuso.
+
+> ⚠️ È una tenda, non una cassaforte: i numeri sono dentro il file, e chi apre il
+> sorgente o gli strumenti da sviluppatore li trova. Serve a non averli sotto gli occhi
+> di tutti al tavolo, non a difenderli da chi li va a cercare.
+
 Il giro tipico è questo:
 
 1. Passi `standalone_inga.html` a chi deve giocare l'asta.
