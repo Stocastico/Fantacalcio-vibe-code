@@ -57,6 +57,17 @@
             <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso, tenendo da parte 1 credito per ogni posto ancora vuoto in rosa">Max spendibile: 0</span>
         </div>
 
+        <!--
+            I tetti di spesa e gli spostamenti di crediti sono il piano di chi ti ha
+            passato la lista: per chiamare non servono, e a un tavolo pieno di
+            avversari è meglio che non stiano a schermo. Restano dietro questo
+            bottone, che parte sempre chiuso a ogni apertura della pagina.
+        -->
+        <div class="row" style="margin-top:4px;">
+            <button id="btnRivela" class="emergency">⛔ Mostra i numeri riservati</button>
+            <span class="muted" id="notaRiservata" style="align-self:center;"></span>
+        </div>
+
         <div class="layout" style="margin-top:16px;">
             <div>
                 <div class="grid">

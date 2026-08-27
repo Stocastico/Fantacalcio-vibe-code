@@ -99,3 +99,14 @@ test('la pagina base sa leggere un CSV e sa riscriversi', () => {
     assert.ok(html.includes('id="fileCsv"'), 'manca il campo per scegliere il file');
     assert.ok(html.includes('btnSavePage'), 'manca il bottone per scaricare la pagina');
 });
+
+test('la pagina base parte coi numeri riservati nascosti', () => {
+    // Controllo sul testo del file, perché qui i test girano senza browser: non
+    // dimostra che a schermo non si veda niente (quello va provato aprendola),
+    // ma becca il caso che conta — qualcuno che cambia il valore di partenza e
+    // consegna a chi chiama una pagina con i tetti in chiaro.
+    const html = leggi('standalone_inga.html');
+    assert.match(html, /let riservato = true;/, 'la modalità riservata non parte accesa');
+    assert.ok(html.includes('btnRivela'), 'manca il bottone per mostrare i numeri');
+    assert.ok(html.includes('Mostra i numeri riservati'), 'manca l\'etichetta del bottone');
+});
