@@ -5,7 +5,7 @@ Niente build, niente server: apri il file `.html` col doppio click.
 
 | File | A cosa serve |
 | --- | --- |
-| `index.html` | asta principale |
+| `index.html` | asta principale (tetti e ridistribuzione nascosti a schermo) |
 | `market-auction.html` | mercato di riparazione (massimali nascosti a schermo) |
 | `*-standalone.html` | le stesse pagine in un file solo, per portarle in giro — **generate** |
 | `standalone_inga.html` | versione base per chi chiama al posto di qualcun altro — **generata** |
@@ -39,7 +39,7 @@ All'asta, in ordine:
 3. **Quando chiama un altro**, scrivi il nome in *Cerca per nome*. Se è fra i tuoi
    desiderati si apre il riquadro dell'asta; se non c'è, la pagina te lo dice.
 4. **Mentre si rilancia**, tieni aggiornata l'*Offerta attuale sul tavolo* e premi
-   *Calcola la mia offerta*: ti risponde **rilancia a N**, **sopra il tuo tetto** o
+   *Calcola la mia offerta*: ti risponde **rilancia a N**, **sopra il piano** o
    **STOP**. Il numero da non superare mai è la pillola *Max spendibile*.
 5. **Appena si chiude**, premi **✅ Preso io** (il prezzo è già compilato) oppure
    **😞 Andato ad altri**: è questo che tiene aggiornati i crediti degli altri.
@@ -49,6 +49,10 @@ All'asta, in ordine:
 7. **Se un tuo desiderato va via**, apri *Alternative* e scegli il ripiego. Togli con
    la ✕ chi è già stato chiamato, così resta davanti solo chi è ancora libero.
 8. **A fine asta** premi *📦 Esporta CSV* per portarti via la rosa.
+
+Tetti e ridistribuzione dei crediti non stanno a schermo: la pagina parte chiusa e li
+mostra solo se premi *⛔ Mostra i numeri riservati*. Vedi [I numeri
+riservati](#i-numeri-riservati).
 
 Lo stato è salvato nel browser dopo ogni azione: se la pagina si chiude o il computer
 si spegne, riaprila e ritrovi tutto. *Reset totale* serve solo per ricominciare da capo.
@@ -116,11 +120,30 @@ Con 500 crediti e 25 giocatori da comprare, sul primo arrivi a 476. Il totale de
 rosa si imposta nella pagina (0 = nessuna riserva).
 
 *Calcola la mia offerta* dà tre risposte: **rilancia a N** (dentro il piano),
-**sopra il tuo tetto** (sostenibile, ma quei crediti li togli agli altri), **STOP**
-(non ci sono i crediti).
+**sopra il piano** (sostenibile, ma quei crediti li togli agli altri), **STOP**
+(non ci sono i crediti). Il tetto vero e proprio compare nella risposta solo se hai
+scoperto i numeri riservati.
 
 Due pillole simili ma diverse: **In lista** sono i giocatori rimasti nella wishlist,
 **Da comprare** sono gli slot di rosa ancora vuoti — cala solo quando compri.
+
+## I numeri riservati
+
+Al tavolo la pagina la può tenere in mano qualcun altro al posto tuo — e il tuo piano
+di spesa non deve leggerlo. Sia `index.html` sia `standalone_inga.html` partono quindi
+con **tetti e ridistribuzione dei crediti nascosti**: niente massimale per giocatore
+nei consigli di rilancio, nella lista rimanente, in rosa e nei messaggi di acquisto,
+niente pillola *Somma tetti*, niente elenco di chi ha ceduto crediti a chi, e niente
+colonna dei massimali nel CSV esportato. Restano visibili le cose che servono a
+chiamare: chi c'è in lista, quanto si è speso, e la pillola *Max spendibile*.
+
+Il bottone rosso **⛔ Mostra i numeri riservati** li rimette a schermo, previa conferma,
+e li rinasconde. Riaprendo la pagina si riparte sempre da nascosti, anche a metà asta:
+se il file passa di mano, passa già chiuso.
+
+> ⚠️ È una tenda, non una cassaforte: i numeri sono dentro il file, e chi apre il
+> sorgente o gli strumenti da sviluppatore li trova. Serve a non averli sotto gli occhi
+> di tutti al tavolo, non a difenderli da chi li va a cercare.
 
 ## Prendere uno fuori lista
 
@@ -174,19 +197,10 @@ doppio click e riparte esattamente da lì, senza CSV, senza Node, senza rete.
 
 ### I numeri riservati
 
-Chi chiama per un altro non deve vedere il suo piano di spesa. La pagina parte quindi
-con **tetti e ridistribuzione dei crediti nascosti**: niente massimale per giocatore,
-niente "somma tetti", niente elenco di chi ha ceduto crediti a chi, e niente colonna
-dei massimali nel CSV esportato. Restano visibili le cose che servono a chiamare: chi
-c'è in lista, quanto si è speso, e la pillola *Max spendibile*.
-
-Il bottone rosso **⛔ Mostra i numeri riservati** li rimette a schermo, previa conferma,
-e li rinasconde. Riaprendo la pagina si riparte sempre da nascosti, anche a metà asta:
-se il file passa di mano, passa già chiuso.
-
-> ⚠️ È una tenda, non una cassaforte: i numeri sono dentro il file, e chi apre il
-> sorgente o gli strumenti da sviluppatore li trova. Serve a non averli sotto gli occhi
-> di tutti al tavolo, non a difenderli da chi li va a cercare.
+Anche qui tetti e ridistribuzione partono nascosti, col bottone **⛔ Mostra i numeri
+riservati** a rimetterli a schermo: è lo stesso comportamento della pagina d'asta,
+descritto in [I numeri riservati](#i-numeri-riservati). Qui conta il doppio, perché il
+file lo apre qualcuno che la lista la vede per la prima volta quel giorno.
 
 Il giro tipico è questo:
 
