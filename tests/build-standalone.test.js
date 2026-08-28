@@ -100,13 +100,22 @@ test('la pagina base sa leggere un CSV e sa riscriversi', () => {
     assert.ok(html.includes('btnSavePage'), 'manca il bottone per scaricare la pagina');
 });
 
-test('la pagina base parte coi numeri riservati nascosti', () => {
-    // Controllo sul testo del file, perché qui i test girano senza browser: non
-    // dimostra che a schermo non si veda niente (quello va provato aprendola),
-    // ma becca il caso che conta — qualcuno che cambia il valore di partenza e
-    // consegna a chi chiama una pagina con i tetti in chiaro.
-    const html = leggi('standalone_inga.html');
-    assert.match(html, /let riservato = true;/, 'la modalità riservata non parte accesa');
-    assert.ok(html.includes('btnRivela'), 'manca il bottone per mostrare i numeri');
-    assert.ok(html.includes('Mostra i numeri riservati'), 'manca l\'etichetta del bottone');
-});
+// --- i numeri riservati ------------------------------------------------------
+//
+// Tetti di spesa e spostamenti di crediti non stanno a schermo finché non li
+// chiedi col bottone. Vale per la pagina base, che finisce in mano a chi chiama
+// per un altro, e vale per quella d'asta, che al tavolo può tenerla qualcuno al
+// posto tuo.
+
+for (const file of ['standalone_inga.html', 'index-standalone.html']) {
+    test(`${file} parte coi numeri riservati nascosti`, () => {
+        // Controllo sul testo del file, perché qui i test girano senza browser: non
+        // dimostra che a schermo non si veda niente (quello va provato aprendola),
+        // ma becca il caso che conta — qualcuno che cambia il valore di partenza e
+        // consegna una pagina con i tetti in chiaro.
+        const html = leggi(file);
+        assert.match(html, /let riservato = true;/, 'la modalità riservata non parte accesa');
+        assert.ok(html.includes('btnRivela'), 'manca il bottone per mostrare i numeri');
+        assert.ok(html.includes('Mostra i numeri riservati'), 'manca l\'etichetta del bottone');
+    });
+}

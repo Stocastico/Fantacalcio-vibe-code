@@ -570,6 +570,17 @@
         <span class="pill pill-cap" id="maxSpend" title="Il massimo che puoi pagare adesso per un giocatore, tenendo da parte 1 credito per ogni slot di rosa ancora vuoto">Max spendibile: 0</span>
     </div>
 
+    <!--
+        I tetti di spesa e gli spostamenti di crediti sono il tuo piano d'asta: per
+        chiamare non servono, e se al tavolo la pagina la tiene in mano qualcun altro
+        al posto tuo è meglio che non stiano a schermo. Restano dietro questo bottone,
+        che parte sempre chiuso a ogni apertura della pagina.
+    -->
+    <div class="row" style="margin-top:4px;">
+        <button id="btnRivela" class="emergency">⛔ Mostra i numeri riservati</button>
+        <span class="muted" id="notaRiservata" style="align-self:center;"></span>
+    </div>
+
     <div class="layout" style="margin-top:16px;">
         <div>
             <div class="grid">
@@ -2126,6 +2137,19 @@
             let current = null;
             let suggested = null;
 
+            /**
+             * Modalità riservata: a schermo non compaiono né i tetti di spesa né gli
+             * spostamenti di crediti fra un giocatore e l'altro. Sono il tuo piano
+             * d'asta, e per chiamare non servono: basta sapere se si può rilanciare e
+             * fino a quanto.
+             *
+             * Parte accesa a ogni apertura della pagina, apposta: se al tavolo ci va
+             * qualcun altro al posto tuo, la pagina la trova già chiusa. Non è una
+             * cassaforte — chi apre il sorgente del file i numeri li trova — è per non
+             * averli sotto gli occhi di tutti.
+             */
+            let riservato = true;
+
             // --- helper di output ---------------------------------------------------
 
             /**
@@ -2145,6 +2169,16 @@
                 return details ? `${p.name} (${details})` : p.name;
             }
 
+            /**
+             * Il dettaglio della ridistribuzione ("Tizio 40→43, Caio 20→22") è l'elenco
+             * dei tetti di mezza lista: in modalità riservata resta il fatto, non i numeri.
+             */
+            function descriviRidistribuzione(res) {
+                return riservato
+                    ? 'I crediti sono stati ridistribuiti fra gli altri giocatori della lista.'
+                    : credits.describe(res) + '.';
+            }
+
             // --- rendering ----------------------------------------------------------
 
             function render() {
@@ -2154,6 +2188,8 @@
                 $('countC').textContent = `C: ${c.C}`;
                 $('countA').textContent = `A: ${c.A}`;
                 $('sumNow').textContent = `Somma tetti: ${engine.sumMax()}`;
+                $('sumNow').hidden = riservato;
+                renderRiservato();
                 $('budgetLeft').textContent = `Crediti residui: ${engine.left()}`;
                 $('playersLeft').textContent = `In lista: ${engine.pool.length}`;
                 $('slotsLeft').textContent = engine.rosterSize
@@ -2169,6 +2205,17 @@
                 renderRemaining();
                 renderShortlists();
                 renderBanner();
+            }
+
+            /** Il bottone dice sempre cosa succede se lo premi, e la nota cosa stai nascondendo. */
+            function renderRiservato() {
+                const btn = $('btnRivela');
+                btn.textContent = riservato ? '⛔ Mostra i numeri riservati' : '🙈 Nascondi di nuovo i numeri';
+                btn.classList.toggle('emergency', riservato);
+                btn.classList.toggle('secondary', !riservato);
+                $('notaRiservata').textContent = riservato
+                    ? 'Tetti di spesa e spostamenti di crediti sono nascosti.'
+                    : '⚠️ I numeri sono a schermo: occhio a chi ti sta intorno.';
             }
 
             /**
@@ -2212,7 +2259,7 @@
                         label.appendChild(tag);
                     } else if (p.max !== null && p.max !== undefined && p.price > p.max) {
                         price.classList.add('over');
-                        price.title = `Sopra il tuo tetto di ${p.max}`;
+                        price.title = riservato ? 'Sopra il tetto previsto per lui' : `Sopra il tuo tetto di ${p.max}`;
                     }
 
                     li.append(label, price);
@@ -2227,9 +2274,13 @@
                     const li = document.createElement('li');
                     const label = document.createElement('span');
                     label.textContent = describePlayer(p);
-                    const max = document.createElement('strong');
-                    max.textContent = String(p.max);
-                    li.append(label, max);
+                    li.appendChild(label);
+                    // Il nome serve a sapere chi chiamare; il tetto no.
+                    if (!riservato) {
+                        const max = document.createElement('strong');
+                        max.textContent = String(p.max);
+                        li.appendChild(max);
+                    }
                     list.appendChild(li);
                 }
             }
@@ -2249,6 +2300,12 @@
                 }
                 banner.hidden = false;
                 banner.className = 'banner ' + (diff > 0 ? 'banner-warn' : 'banner-info');
+                if (riservato) {
+                    banner.textContent = diff > 0
+                        ? '⚠️ La lista vale più crediti di quelli disponibili: si gioca lo stesso, ma i tetti sono un po\' ottimisti.'
+                        : 'ℹ️ Restano crediti non assegnati a nessun giocatore in lista.';
+                    return;
+                }
                 banner.textContent = diff > 0
                     ? `⚠️ Stai pianificando ${diff} crediti più del budget: somma tetti ${engine.sumMax()} + speso ${engine.spent} = ${engine.allocated()}, budget ${engine.budget}.`
                     : `ℹ️ Ti restano ${-diff} crediti non assegnati a nessun giocatore in lista.`;
@@ -2299,12 +2356,17 @@
                 $('finalPrice').value = String(advice.bid);
 
                 // Sopra il piano ma sostenibile: si può fare, basta saperlo.
+                // Né `advice.max` né `advice.overBy` possono comparire: sono il tetto.
                 if (advice.status === 'over') {
-                    say(out, `⚠️ Rilancia a ${advice.bid} se lo vuoi davvero: sono ${advice.overBy} crediti sopra il tuo tetto di ${advice.max}. Puoi arrivare fino a ${advice.cap}, ma li togli agli altri giocatori della lista.`, 'warn');
+                    say(out, riservato
+                        ? `⚠️ Rilancia a ${advice.bid} se lo vuoi davvero: è già sopra il piano previsto per lui. Puoi arrivare fino a ${advice.cap}, ma quei crediti li togli agli altri giocatori della lista.`
+                        : `⚠️ Rilancia a ${advice.bid} se lo vuoi davvero: sono ${advice.overBy} crediti sopra il tuo tetto di ${advice.max}. Puoi arrivare fino a ${advice.cap}, ma li togli agli altri giocatori della lista.`, 'warn');
                     return;
                 }
 
-                say(out, `💰 Rilancia a ${advice.bid} (il tuo tetto è ${advice.max}, il limite di spesa ${advice.cap}).`, 'ok');
+                say(out, riservato
+                    ? `💰 Rilancia a ${advice.bid}: sei ancora dentro il piano (il limite di spesa è ${advice.cap}).`
+                    : `💰 Rilancia a ${advice.bid} (il tuo tetto è ${advice.max}, il limite di spesa ${advice.cap}).`, 'ok');
             }
 
             function confirmWin() {
@@ -2326,12 +2388,16 @@
                 }
 
                 const parts = [`🎉 Preso ${res.player.name} per ${res.price}.`];
-                if (res.over) parts.push(`Sforato di ${res.price - res.player.max} sul tuo tetto di ${res.player.max}: i crediti li recuperi dagli altri.`);
-                if (res.redistribution.changes.length) parts.push(credits.describe(res.redistribution) + '.');
+                if (res.over) {
+                    parts.push(riservato
+                        ? 'È sopra il piano previsto per lui: i crediti li recuperi dagli altri.'
+                        : `Sforato di ${res.price - res.player.max} sul tuo tetto di ${res.player.max}: i crediti li recuperi dagli altri.`);
+                }
+                if (res.redistribution.changes.length) parts.push(descriviRidistribuzione(res.redistribution));
                 if (res.unabsorbed) {
                     parts.push(res.unabsorbed > 0
-                        ? `${res.unabsorbed} crediti non assegnati: lista troppo corta.`
-                        : `⚠️ ${-res.unabsorbed} crediti di sforamento non recuperabili: gli altri sono già tutti a 1.`);
+                        ? (riservato ? 'Restano crediti non assegnati: lista troppo corta.' : `${res.unabsorbed} crediti non assegnati: lista troppo corta.`)
+                        : (riservato ? '⚠️ Una parte dello sforamento non è recuperabile dagli altri.' : `⚠️ ${-res.unabsorbed} crediti di sforamento non recuperabili: gli altri sono già tutti a 1.`));
                 }
 
                 say($('outBuy'), parts.join(' '), res.over ? 'warn' : 'ok');
@@ -2348,7 +2414,7 @@
                     return;
                 }
                 const parts = [`😞 ${res.player.name} è andato ad altri, tolto dalla lista.`];
-                if (res.redistribution.changes.length) parts.push(credits.describe(res.redistribution) + '.');
+                if (res.redistribution.changes.length) parts.push(descriviRidistribuzione(res.redistribution));
                 say($('outBuy'), parts.join(' '), 'warn');
                 closeAuction();
                 render();
@@ -2421,7 +2487,9 @@
 
                 const esatto = engine.find(name);
                 if (esatto) {
-                    say(out, `ℹ️ "${esatto.name}" è fra i tuoi desiderati, tetto ${esatto.max}: cercalo qui sopra e compralo dall'asta normale, così il tetto viene usato.`, 'warn');
+                    say(out, riservato
+                        ? `ℹ️ "${esatto.name}" è fra i tuoi desiderati: cercalo qui sopra e compralo dall'asta normale, così il suo tetto viene usato.`
+                        : `ℹ️ "${esatto.name}" è fra i tuoi desiderati, tetto ${esatto.max}: cercalo qui sopra e compralo dall'asta normale, così il tetto viene usato.`, 'warn');
                     return;
                 }
 
@@ -2442,12 +2510,18 @@
 
                 const parts = [`⚠️ "${res.player.name}" non è fra i tuoi giocatori desiderati: l'ho aggiunto lo stesso alla rosa per ${res.price}.`];
                 if (res.redistribution.changes.length) {
-                    parts.push(`Quei crediti li ho tolti a chi resta in lista — ${credits.describe(res.redistribution)}.`);
+                    parts.push(riservato
+                        ? 'Quei crediti li ho tolti a chi resta in lista.'
+                        : `Quei crediti li ho tolti a chi resta in lista — ${credits.describe(res.redistribution)}.`);
                 }
                 if (res.unabsorbed < 0) {
-                    parts.push(engine.pool.length
-                        ? `⚠️ ${-res.unabsorbed} crediti non recuperabili: gli altri in lista sono già tutti a 1.`
-                        : `⚠️ In lista non è rimasto nessuno: questi ${res.price} crediti sono tutti fuori piano.`);
+                    if (!engine.pool.length) {
+                        parts.push(`⚠️ In lista non è rimasto nessuno: questi ${res.price} crediti sono tutti fuori piano.`);
+                    } else {
+                        parts.push(riservato
+                            ? '⚠️ Una parte di quei crediti non è recuperabile: gli altri in lista sono già tutti a 1.'
+                            : `⚠️ ${-res.unabsorbed} crediti non recuperabili: gli altri in lista sono già tutti a 1.`);
+                    }
                 }
 
                 say(out, parts.join(' '), 'warn');
@@ -2590,6 +2664,20 @@
             $('btnPlayerLost').addEventListener('click', confirmLoss);
             $('btnCancelAuction').addEventListener('click', closeAuction);
 
+            $('btnRivela').addEventListener('click', () => {
+                if (riservato && !confirm(
+                    'Stai per mettere a schermo i tuoi tetti di spesa e gli spostamenti di crediti.\n\n' +
+                    'È il tuo piano d\'asta: fallo vedere solo se non c\'è nessuno che guarda.\n\n' +
+                    'Procedo?')) return;
+
+                riservato = !riservato;
+                // I messaggi già scritti resterebbero com'erano: meglio ripulirli che
+                // lasciare un numero a schermo dopo aver premuto "nascondi".
+                for (const box of ['outCheck', 'outRandom', 'outAuction', 'outBuy', 'outOffList', 'outShortlists', 'outSettings']) say($(box), '');
+                render();
+                if (!riservato) say($('outSettings'), '⚠️ Numeri riservati a schermo. Ripremi il bottone per nasconderli.', 'warn');
+            });
+
             $('btnShowLeft').addEventListener('click', () => {
                 const wrap = $('leftWrap');
                 wrap.hidden = !wrap.hidden;
@@ -2620,13 +2708,16 @@
                 // Un fuori lista in lista non ci torna: non c'era.
                 const coda = p.offList
                     ? 'Non era fra i desiderati, quindi è solo uscito dalla rosa e i crediti sono tornati agli altri.'
-                    : `Rimesso in lista con tetto ${p.max}.`;
+                    : (riservato ? 'Rimesso in lista col suo tetto.' : `Rimesso in lista con tetto ${p.max}.`);
                 say($('outBuy'), `↩️ Annullato: ${label}. ${coda}`, 'ok');
                 closeAuction();
                 render();
             });
 
             $('btnExportCSV').addEventListener('click', () => {
+                // Il CSV esce dallo schermo e resta su un disco: se i numeri sono
+                // nascosti qui, non devono uscire nemmeno di lì.
+                engine.config.hideMaxInCsv = riservato;
                 const res = engine.exportCSV('acquisti_fantacalcio');
                 say($('outBuy'), res.ok ? '📦 CSV esportato.' : `⚠️ ${res.message}`, res.ok ? 'ok' : 'warn');
             });
