@@ -227,7 +227,10 @@
         $('playerInfo').textContent = describePlayer(player);
         $('currentOffer').value = startOffer === undefined ? '' : String(startOffer);
         $('finalPrice').value = '';
-        say($('outAuction'), '');
+        // Il caso più frequente: lo chiami e non lo vuole nessuno. Va detto
+        // subito che per prenderlo alla base non serve passare da un rilancio.
+        const base = startOffer === undefined ? engineApi.BASE_PRICE : startOffer;
+        say($('outAuction'), `📣 Se non rilancia nessuno premi "✅ Preso io": te lo registro a ${base}.`, 'ok');
         $('auctionSection').hidden = false;
         $('auctionSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         $('currentOffer').focus();
@@ -280,11 +283,14 @@
     function confirmWin() {
         if (!current) return;
         const out = $('outAuction');
-        const raw = $('finalPrice').value;
-        const price = raw === '' ? suggested : text.toInt(raw);
+        const price = engineApi.finalPrice({
+            typed: $('finalPrice').value,
+            suggested,
+            onTable: $('currentOffer').value,
+        });
 
         if (price === null || price === undefined) {
-            say(out, '❌ Inserisci il prezzo finale pagato (o premi prima "Calcola la mia offerta").', 'error');
+            say(out, '❌ Prezzo finale non valido: scrivi un numero (o lascia il campo vuoto).', 'error');
             return;
         }
 

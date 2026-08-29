@@ -41,8 +41,10 @@ All'asta, in ordine:
 4. **Mentre si rilancia**, tieni aggiornata l'*Offerta attuale sul tavolo* e premi
    *Calcola la mia offerta*: ti risponde **rilancia a N**, **sopra il piano** o
    **STOP**. Il numero da non superare mai è la pillola *Max spendibile*.
-5. **Appena si chiude**, premi **✅ Preso io** (il prezzo è già compilato) oppure
-   **😞 Andato ad altri**: è questo che tiene aggiornati i crediti degli altri.
+5. **Appena si chiude**, premi **✅ Preso io** oppure **😞 Andato ad altri**: è
+   questo che tiene aggiornati i crediti degli altri. Se *Prezzo finale pagato* è
+   vuoto vale l'ultimo rilancio consigliato, altrimenti l'offerta sul tavolo — così
+   il giocatore che chiami e non vuole nessuno lo prendi a 1 con un clic solo.
    Sbagliato? *Annulla ultima azione*.
 6. **Se il giocatore che hai preso non era in lista**, registralo in *Ho preso uno
    fuori lista*: serve a non ritrovarti con la rosa incompleta e i conti sballati.

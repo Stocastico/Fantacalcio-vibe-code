@@ -1165,6 +1165,10 @@
 
             const VALID_ROLES = ['P', 'D', 'C', 'A'];
 
+            /** Base d'asta: la cifra a cui un giocatore si chiama, e a cui lo paghi
+             *  se non rilancia nessuno. */
+            const BASE_PRICE = 1;
+
             /**
              * Porta una lista qualsiasi nella forma { name, max, role, team }.
              * Accetta sia `max` che `bid` (il nome usato nelle stagioni precedenti) e
@@ -1203,6 +1207,28 @@
                 });
 
                 return { players, problems };
+            }
+
+            /**
+             * Quanto si paga quando dichiari di aver preso il giocatore in asta.
+             *
+             * Esiste perché il caso più comune è quello in cui chiami un giocatore e non
+             * lo vuole nessuno: lo paghi la base, non il rilancio successivo. In ordine:
+             *  - `typed`      il prezzo scritto a mano, che vince sempre (anche 0)
+             *  - `suggested`  l'ultimo rilancio consigliato, se l'hai calcolato
+             *  - `onTable`    l'offerta rimasta sul tavolo, che è tua se hai vinto
+             * Se non c'è niente di tutto questo nessuno ha rilanciato: si paga la base.
+             *
+             * Restituisce `null` solo se `typed` c'è ma non è un numero.
+             */
+            function finalPrice({ typed, suggested, onTable } = {}) {
+                const written = typeof typed === 'string' ? typed.trim() : typed;
+                if (written !== '' && written !== null && written !== undefined) return toInt(written);
+
+                if (suggested !== null && suggested !== undefined) return toInt(suggested);
+
+                const table = toInt(typeof onTable === 'string' ? onTable.trim() : onTable);
+                return table === null ? BASE_PRICE : Math.max(table, BASE_PRICE);
             }
 
             /**
@@ -1370,7 +1396,7 @@
                         : toInt(currentOffer);
                     if (cur === null || cur < 0) return Object.assign(base, { status: 'invalid' });
 
-                    let next = cur <= 0 ? 1 : cur + 1;
+                    let next = cur <= 0 ? BASE_PRICE : cur + 1;
 
                     // Regola del 36: se il tetto è alto e siamo ancora bassi, si salta
                     // direttamente a 36 per scoraggiare i rilanci a un credito per volta.
@@ -1691,7 +1717,7 @@
                 });
             }
 
-            const api = { createEngine, normalizePlayers, VALID_ROLES };
+            const api = { createEngine, normalizePlayers, finalPrice, BASE_PRICE, VALID_ROLES };
 
             global.FC = global.FC || {};
             global.FC.engine = api;
