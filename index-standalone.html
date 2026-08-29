@@ -2011,38 +2011,38 @@
             const ROSTER_SIZE = 25;
 
             const PLAYERS = [
-                // Portieri — 3, 37 crediti
-                { name: "Svilar",        role: "P", team: "Roma",     max: 26 },
-                { name: "Falcone",       role: "P", team: "Lecce",    max:  7 },
-                { name: "Caprile",       role: "P", team: "Cagliari", max:  4 },
+                // Portieri — 3, 44 crediti
+                { name: "Svilar",          role: "P", team: "Roma",      max: 42 },
+                { name: "Palmisani",       role: "P", team: "Frosinone", max:  1 },
+                { name: "Thiam",           role: "P", team: "Monza",     max:  1 },
 
-                // Difensori — 8, 109 crediti
-                { name: "Mancini",       role: "D", team: "Roma",     max: 30 },
-                { name: "Rrahmani",      role: "D", team: "Napoli",   max: 20 },
-                { name: "N'Dicka",       role: "D", team: "Roma",     max: 20 },
-                { name: "Doekhi",        role: "D", team: "Lazio",    max: 12 },
-                { name: "Gila",          role: "D", team: "Milan",    max: 12 },
-                { name: "Tiago Gabriel", role: "D", team: "Lecce",    max:  7 },
-                { name: "Marin",         role: "D", team: "Napoli",   max:  4 },
-                { name: "Troilo",        role: "D", team: "Parma",    max:  4 },
+                // Difensori — 8, 84 crediti
+                { name: "Mancini",         role: "D", team: "Roma",      max: 36 },
+                { name: "Pavlovic",        role: "D", team: "Milan",     max: 26 },
+                { name: "Doekhi",          role: "D", team: "Lazio",     max: 10 },
+                { name: "Rrahmani",        role: "D", team: "Napoli",    max:  4 },
+                { name: "N'Dicka",         role: "D", team: "Roma",      max:  3 },
+                { name: "Mina",            role: "D", team: "Cagliari",  max:  2 },
+                { name: "Gabriel (Tiago)", role: "D", team: "Lecce",     max:  2 },
+                { name: "Troilo",          role: "D", team: "Parma",     max:  1 },
 
-                // Centrocampisti — 8, 175 crediti
-                { name: "Calhanoglu",    role: "C", team: "Inter",    max: 66 },
-                { name: "Orsolini",      role: "C", team: "Bologna",  max: 50 },
-                { name: "Vlasic",        role: "C", team: "Torino",   max: 20 },
-                { name: "Casadei",       role: "C", team: "Torino",   max: 11 },
-                { name: "Ekkelenkamp",   role: "C", team: "Udinese",  max: 11 },
-                { name: "Locatelli",     role: "C", team: "Juventus", max:  8 },
-                { name: "Bernabe",       role: "C", team: "Parma",    max:  6 },
-                { name: "Helgason",      role: "C", team: "Venezia",  max:  3 },
+                // Centrocampisti — 8, 172 crediti
+                { name: "Calhanoglu",      role: "C", team: "Inter",     max: 80 },
+                { name: "Orsolini",        role: "C", team: "Bologna",   max: 50 },
+                { name: "Vlasic",          role: "C", team: "Torino",    max: 24 },
+                { name: "Locatelli",       role: "C", team: "Juventus",  max: 14 },
+                { name: "Casadei",         role: "C", team: "Torino",    max:  1 },
+                { name: "Ekkelenkamp",     role: "C", team: "Udinese",   max:  1 },
+                { name: "Bernabe",         role: "C", team: "Parma",     max:  1 },
+                { name: "Fazzini",         role: "C", team: "Cagliari",  max:  1 },
 
-                // Attaccanti — 6, 179 crediti
-                { name: "Hojlund",       role: "A", team: "Napoli",   max: 67 },
-                { name: "Douvikas",      role: "A", team: "Como",     max: 42 },
-                { name: "Raspadori",     role: "A", team: "Atalanta", max: 20 },
-                { name: "Colombo",       role: "A", team: "Genoa",    max: 20 },
-                { name: "Akor Adams",    role: "A", team: "Venezia",  max: 16 },
-                { name: "Berardi",       role: "A", team: "Sassuolo", max: 14 },
+                // Attaccanti — 6, 200 crediti
+                { name: "Pinamonti",       role: "A", team: "Lazio",     max: 50 },
+                { name: "Raspadori",       role: "A", team: "Atalanta",  max: 46 },
+                { name: "Colombo Lo.",     role: "A", team: "Genoa",     max: 42 },
+                { name: "Berardi",         role: "A", team: "Sassuolo",  max: 28 },
+                { name: "Douvikas",        role: "A", team: "Como",      max: 18 },
+                { name: "Adams A.",        role: "A", team: "Venezia",   max: 16 },
             ];
 
             const api = { AUCTION_BUDGET, ROSTER_SIZE, PLAYERS };
@@ -2082,30 +2082,30 @@
 
             /** Su chi ripiego se il desiderato me lo portano via. */
             const ALTERNATIVES = [
-                { name: "Butez",         role: "P", team: "Como"     },
-                { name: "Carnesecchi",   role: "P", team: "Atalanta" },
-                { name: "Pavlovic",      role: "D", team: "Milan"    },
-                { name: "Mina",          role: "D", team: "Cagliari" },
-                { name: "McTominay",     role: "C", team: "Napoli"   },
-                { name: "Perrone",       role: "C", team: "Como"     },
-                { name: "Zielinski",     role: "C", team: "Inter"    },
-                { name: "Goncalo Ramos", role: "A", team: "Milan"    },
-                { name: "Davis",         role: "A", team: "Udinese"  },
-                { name: "Krstovic",      role: "A", team: "Atalanta" },
+                { name: "Carnesecchi", role: "P", team: "Atalanta"   },
+                { name: "Butez",       role: "P", team: "Como"       },
+                { name: "Wesley",      role: "D", team: "Roma"       },
+                { name: "Kristensen",  role: "D", team: "Atalanta"   },
+                { name: "McTominay",   role: "C", team: "Napoli"     },
+                { name: "Perrone",     role: "C", team: "Como"       },
+                { name: "Zielinski",   role: "C", team: "Inter"      },
+                { name: "Pellegrino",  role: "A", team: "Fiorentina" },
+                { name: "Krstovic",    role: "A", team: "Atalanta"   },
+                { name: "Stulic",      role: "A", team: "Lecce"      },
             ];
 
             /** Le esche: li chiamo io per primo, ma non li voglio. */
             const BAITS = [
-                { name: "Lautaro",  role: "A", team: "Inter"      },
-                { name: "Malen",    role: "A", team: "Roma"       },
-                { name: "Dimarco",  role: "D", team: "Inter"      },
-                { name: "Nico Paz", role: "C", team: "Como"       },
-                { name: "Thuram",   role: "A", team: "Inter"      },
-                { name: "Scamacca", role: "A", team: "Atalanta"   },
-                { name: "Pulisic",  role: "C", team: "Milan"      },
-                { name: "Bremer",   role: "D", team: "Juventus"   },
-                { name: "Kean",     role: "A", team: "Fiorentina" },
-                { name: "Yildiz",   role: "A", team: "Juventus"   },
+                { name: "Martinez (Lautaro)", role: "A", team: "Inter"      },
+                { name: "Malen",              role: "A", team: "Roma"       },
+                { name: "Thuram M.",          role: "A", team: "Inter"      },
+                { name: "Paz",                role: "C", team: "Como"       },
+                { name: "Dimarco",            role: "D", team: "Inter"      },
+                { name: "Yildiz",             role: "A", team: "Juventus"   },
+                { name: "Kean",               role: "A", team: "Fiorentina" },
+                { name: "Davis",              role: "A", team: "Udinese"    },
+                { name: "Scamacca",           role: "A", team: "Atalanta"   },
+                { name: "Bremer",             role: "D", team: "Juventus"   },
             ];
 
             const api = { ALTERNATIVES, BAITS };

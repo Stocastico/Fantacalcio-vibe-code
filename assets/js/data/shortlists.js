@@ -27,30 +27,30 @@
 
     /** Su chi ripiego se il desiderato me lo portano via. */
     const ALTERNATIVES = [
-        { name: "Butez",         role: "P", team: "Como"     },
-        { name: "Carnesecchi",   role: "P", team: "Atalanta" },
-        { name: "Pavlovic",      role: "D", team: "Milan"    },
-        { name: "Mina",          role: "D", team: "Cagliari" },
-        { name: "McTominay",     role: "C", team: "Napoli"   },
-        { name: "Perrone",       role: "C", team: "Como"     },
-        { name: "Zielinski",     role: "C", team: "Inter"    },
-        { name: "Goncalo Ramos", role: "A", team: "Milan"    },
-        { name: "Davis",         role: "A", team: "Udinese"  },
-        { name: "Krstovic",      role: "A", team: "Atalanta" },
+        { name: "Carnesecchi", role: "P", team: "Atalanta"   },
+        { name: "Butez",       role: "P", team: "Como"       },
+        { name: "Wesley",      role: "D", team: "Roma"       },
+        { name: "Kristensen",  role: "D", team: "Atalanta"   },
+        { name: "McTominay",   role: "C", team: "Napoli"     },
+        { name: "Perrone",     role: "C", team: "Como"       },
+        { name: "Zielinski",   role: "C", team: "Inter"      },
+        { name: "Pellegrino",  role: "A", team: "Fiorentina" },
+        { name: "Krstovic",    role: "A", team: "Atalanta"   },
+        { name: "Stulic",      role: "A", team: "Lecce"      },
     ];
 
     /** Le esche: li chiamo io per primo, ma non li voglio. */
     const BAITS = [
-        { name: "Lautaro",  role: "A", team: "Inter"      },
-        { name: "Malen",    role: "A", team: "Roma"       },
-        { name: "Dimarco",  role: "D", team: "Inter"      },
-        { name: "Nico Paz", role: "C", team: "Como"       },
-        { name: "Thuram",   role: "A", team: "Inter"      },
-        { name: "Scamacca", role: "A", team: "Atalanta"   },
-        { name: "Pulisic",  role: "C", team: "Milan"      },
-        { name: "Bremer",   role: "D", team: "Juventus"   },
-        { name: "Kean",     role: "A", team: "Fiorentina" },
-        { name: "Yildiz",   role: "A", team: "Juventus"   },
+        { name: "Martinez (Lautaro)", role: "A", team: "Inter"      },
+        { name: "Malen",              role: "A", team: "Roma"       },
+        { name: "Thuram M.",          role: "A", team: "Inter"      },
+        { name: "Paz",                role: "C", team: "Como"       },
+        { name: "Dimarco",            role: "D", team: "Inter"      },
+        { name: "Yildiz",             role: "A", team: "Juventus"   },
+        { name: "Kean",               role: "A", team: "Fiorentina" },
+        { name: "Davis",              role: "A", team: "Udinese"    },
+        { name: "Scamacca",           role: "A", team: "Atalanta"   },
+        { name: "Bremer",             role: "D", team: "Juventus"   },
     ];
 
     const api = { ALTERNATIVES, BAITS };
