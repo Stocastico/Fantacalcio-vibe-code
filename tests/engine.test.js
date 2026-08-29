@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createEngine, normalizePlayers } = require('../assets/js/core/engine.js');
+const { createEngine, normalizePlayers, finalPrice, BASE_PRICE } = require('../assets/js/core/engine.js');
 const { memoryBackend } = require('../assets/js/core/storage.js');
 
 /** Lista giocattolo: somma dei massimali = 100, come il budget. */
@@ -231,6 +231,30 @@ test('la regola del 36 scatta solo sui tetti alti e sulle offerte basse', () => 
 
     const spenta = createEngine({ budget: 200, players: [{ name: 'Big', max: 90 }], easterEgg: false });
     assert.equal(spenta.bidAdvice('Big', 10).bid, 11);
+});
+
+// --- prezzo finale ----------------------------------------------------------
+
+test('finalPrice: senza rilanci si paga la base d\'asta', () => {
+    // Il caso del bug: giocatore chiamato a 1, nessuno lo vuole, si prende a 1
+    // senza passare da un rilancio (che lo avrebbe portato a 2).
+    assert.equal(finalPrice({ typed: '', suggested: null, onTable: '1' }), 1);
+    assert.equal(finalPrice({ typed: '', suggested: null, onTable: '' }), BASE_PRICE);
+    assert.equal(finalPrice(), BASE_PRICE);
+});
+
+test('finalPrice: il prezzo scritto a mano vince su tutto', () => {
+    assert.equal(finalPrice({ typed: '7', suggested: 3, onTable: '2' }), 7);
+    assert.equal(finalPrice({ typed: 0, suggested: 3, onTable: '2' }), 0);
+    assert.equal(finalPrice({ typed: 'ciao', suggested: 3 }), null, 'input non numerico: lo segnala l\'interfaccia');
+});
+
+test('finalPrice: senza prezzo scritto vale il rilancio consigliato, poi il tavolo', () => {
+    assert.equal(finalPrice({ typed: '', suggested: 26, onTable: '25' }), 26);
+    assert.equal(finalPrice({ typed: '   ', suggested: null, onTable: '25' }), 25);
+    // Offerte sballate sul tavolo non portano mai sotto la base.
+    assert.equal(finalPrice({ typed: '', suggested: null, onTable: '0' }), BASE_PRICE);
+    assert.equal(finalPrice({ typed: '', suggested: null, onTable: '-5' }), BASE_PRICE);
 });
 
 // --- budget e reset ---------------------------------------------------------
